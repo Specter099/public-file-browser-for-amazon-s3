@@ -46,6 +46,7 @@ Resources:
           - id: AwsSolutions-S10
             reason: aws:SecureTransport policy is properly implemented in the Bucket Policy
     Properties:
+      DeletionPolicy: Delete
       BucketName: !Sub
         - public-file-browser-website-${Unique}
         - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
@@ -78,6 +79,7 @@ Resources:
           - id: AwsSolutions-S10
             reason: aws:SecureTransport policy is properly implemented in the Bucket Policy
     Properties:
+      DeletionPolicy: Delete
       BucketName: !Sub
         - public-file-browser-files-${Unique}
         - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
@@ -221,6 +223,7 @@ Resources:
           - id: CKV_AWS_18
             comment: Unnecessary to log access to the logging bucket.
     Properties:
+      DeletionPolicy: Delete
       BucketName: !Sub
         - public-file-browser-logging-${Unique}
         - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
