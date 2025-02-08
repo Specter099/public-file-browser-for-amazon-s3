@@ -393,7 +393,7 @@ Resources:
     Properties:
       CodeUri: seed_s3_data/
       Handler: app.handler
-      Runtime: python3.11
+      Runtime: python3.13
       Timeout: 30
       Architectures:
         - arm64
