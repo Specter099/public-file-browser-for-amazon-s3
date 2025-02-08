@@ -208,7 +208,7 @@ Resources:
                 aws:SecureTransport: 'false'
   LoggingBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
+    DeletionPolicy: Delete
     Metadata:
       cfn_nag:
         rules_to_suppress:
