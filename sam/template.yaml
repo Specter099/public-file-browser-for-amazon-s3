@@ -1,10 +1,9 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: MIT-0
----
+
 AWSTemplateFormatVersion: '2010-09-09'
-Description: >
-  Public File Browser for Amazon S3
-  **WARNING** This template creates resources which incur charges. You will be billed for the AWS resources used if you create a stack from this template.
+Description: |
+  Public File Browser for Amazon S3 **WARNING** This template creates resources which incur charges. You will be billed for the AWS resources used if you create a stack from this template.
 Parameters:
   SiteName:
     Type: String
@@ -19,11 +18,13 @@ Parameters:
     Default: In New Tab
   VisibleStorageClasses:
     Type: String
-    Description: Comma-delimited list of storage classes to SHOW in directory listings. See S3 GetObject API Reference for possible values.
+    Description: Comma-delimited list of storage classes to SHOW in directory
+      listings. See S3 GetObject API Reference for possible values.
     Default: STANDARD,STANDARD_IA,ONEZONE_IA,REDUCED_REDUNDANCY
   CrossOriginRestriction:
     Type: String
-    Description: First deployment set to "*", all subsequent deployments set to value of the FileBrowserURL CloudFormation output
+    Description: First deployment set to "*", all subsequent deployments set to
+      value of the FileBrowserURL CloudFormation output
     Default: '*'
 Transform: AWS::Serverless-2016-10-31
 Resources:
@@ -34,7 +35,15 @@ Resources:
         Description: Public File Browser for Amazon S3
         Name: !Sub
           - public-file-browser-${Unique}
-          - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+          - Unique: !Select
+              - 4
+              - !Split
+                - '-'
+                - !Select
+                  - 2
+                  - !Split
+                    - /
+                    - !Ref AWS::StackId
         OriginAccessControlOriginType: s3
         SigningBehavior: always
         SigningProtocol: sigv4
@@ -49,7 +58,15 @@ Resources:
       DeletionPolicy: Delete
       BucketName: !Sub
         - public-file-browser-website-${Unique}
-        - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+        - Unique: !Select
+            - 4
+            - !Split
+              - '-'
+              - !Select
+                - 2
+                - !Split
+                  - /
+                  - !Ref AWS::StackId
       AccessControl: Private
       LoggingConfiguration:
         DestinationBucketName: !Ref LoggingBucket
@@ -82,7 +99,15 @@ Resources:
       DeletionPolicy: Delete
       BucketName: !Sub
         - public-file-browser-files-${Unique}
-        - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+        - Unique: !Select
+            - 4
+            - !Split
+              - '-'
+              - !Select
+                - 2
+                - !Split
+                  - /
+                  - !Ref AWS::StackId
       AccessControl: Private
       LoggingConfiguration:
         DestinationBucketName: !Ref LoggingBucket
@@ -131,7 +156,15 @@ Resources:
     Properties:
       Bucket: !Sub
         - public-file-browser-website-${Unique}
-        - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+        - Unique: !Select
+            - 4
+            - !Split
+              - '-'
+              - !Select
+                - 2
+                - !Split
+                  - /
+                  - !Ref AWS::StackId
       PolicyDocument:
         Version: '2012-10-17'
         Id: WebAccess
@@ -145,7 +178,15 @@ Resources:
               - s3:GetObjectVersion
             Resource: !Sub
               - arn:${AWS::Partition}:s3:::public-file-browser-website-${Unique}/*
-              - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+              - Unique: !Select
+                  - 4
+                  - !Split
+                    - '-'
+                    - !Select
+                      - 2
+                      - !Split
+                        - /
+                        - !Ref AWS::StackId
             Condition:
               StringEquals:
                 AWS:SourceArn: !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${CloudFront}
@@ -156,10 +197,26 @@ Resources:
             Resource:
               - !Sub
                 - arn:${AWS::Partition}:s3:::public-file-browser-website-${Unique}
-                - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+                - Unique: !Select
+                    - 4
+                    - !Split
+                      - '-'
+                      - !Select
+                        - 2
+                        - !Split
+                          - /
+                          - !Ref AWS::StackId
               - !Sub
                 - arn:${AWS::Partition}:s3:::public-file-browser-website-${Unique}/*
-                - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+                - Unique: !Select
+                    - 4
+                    - !Split
+                      - '-'
+                      - !Select
+                        - 2
+                        - !Split
+                          - /
+                          - !Ref AWS::StackId
             Condition:
               Bool:
                 aws:SecureTransport: 'false'
@@ -174,7 +231,15 @@ Resources:
     Properties:
       Bucket: !Sub
         - public-file-browser-files-${Unique}
-        - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+        - Unique: !Select
+            - 4
+            - !Split
+              - '-'
+              - !Select
+                - 2
+                - !Split
+                  - /
+                  - !Ref AWS::StackId
       PolicyDocument:
         Version: '2012-10-17'
         Id: WebAccess
@@ -188,7 +253,15 @@ Resources:
               - s3:GetObjectVersion
             Resource: !Sub
               - arn:${AWS::Partition}:s3:::public-file-browser-files-${Unique}/*
-              - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+              - Unique: !Select
+                  - 4
+                  - !Split
+                    - '-'
+                    - !Select
+                      - 2
+                      - !Split
+                        - /
+                        - !Ref AWS::StackId
             Condition:
               StringEquals:
                 AWS:SourceArn: !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${CloudFront}
@@ -199,10 +272,26 @@ Resources:
             Resource:
               - !Sub
                 - arn:${AWS::Partition}:s3:::public-file-browser-files-${Unique}
-                - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+                - Unique: !Select
+                    - 4
+                    - !Split
+                      - '-'
+                      - !Select
+                        - 2
+                        - !Split
+                          - /
+                          - !Ref AWS::StackId
               - !Sub
                 - arn:${AWS::Partition}:s3:::public-file-browser-files-${Unique}/*
-                - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+                - Unique: !Select
+                    - 4
+                    - !Split
+                      - '-'
+                      - !Select
+                        - 2
+                        - !Split
+                          - /
+                          - !Ref AWS::StackId
             Condition:
               Bool:
                 aws:SecureTransport: 'false'
@@ -226,7 +315,15 @@ Resources:
       DeletionPolicy: Delete
       BucketName: !Sub
         - public-file-browser-logging-${Unique}
-        - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+        - Unique: !Select
+            - 4
+            - !Split
+              - '-'
+              - !Select
+                - 2
+                - !Split
+                  - /
+                  - !Ref AWS::StackId
       AccessControl: Private
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -259,7 +356,15 @@ Resources:
     Properties:
       Bucket: !Sub
         - public-file-browser-logging-${Unique}
-        - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+        - Unique: !Select
+            - 4
+            - !Split
+              - '-'
+              - !Select
+                - 2
+                - !Split
+                  - /
+                  - !Ref AWS::StackId
       PolicyDocument:
         Version: '2012-10-17'
         Id: WebAccess
@@ -272,18 +377,42 @@ Resources:
               - s3:PutObject
             Resource: !Sub
               - arn:${AWS::Partition}:s3:::public-file-browser-logging-${Unique}/*
-              - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+              - Unique: !Select
+                  - 4
+                  - !Split
+                    - '-'
+                    - !Select
+                      - 2
+                      - !Split
+                        - /
+                        - !Ref AWS::StackId
             Condition:
               ArnEquals:
                 aws:SourceArn:
                   - !Sub
                     - arn:${AWS::Partition}:s3:::public-file-browser-website-${Unique}
-                    - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+                    - Unique: !Select
+                        - 4
+                        - !Split
+                          - '-'
+                          - !Select
+                            - 2
+                            - !Split
+                              - /
+                              - !Ref AWS::StackId
                   - !Sub
                     - arn:${AWS::Partition}:s3:::public-file-browser-files-${Unique}
-                    - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+                    - Unique: !Select
+                        - 4
+                        - !Split
+                          - '-'
+                          - !Select
+                            - 2
+                            - !Split
+                              - /
+                              - !Ref AWS::StackId
               StringEquals:
-                aws:SourceAccount: !Ref 'AWS::AccountId'
+                aws:SourceAccount: !Ref AWS::AccountId
           - Sid: DenyPlaintextAccess
             Principal: '*'
             Effect: Deny
@@ -291,13 +420,154 @@ Resources:
             Resource:
               - !Sub
                 - arn:${AWS::Partition}:s3:::public-file-browser-logging-${Unique}
-                - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+                - Unique: !Select
+                    - 4
+                    - !Split
+                      - '-'
+                      - !Select
+                        - 2
+                        - !Split
+                          - /
+                          - !Ref AWS::StackId
               - !Sub
                 - arn:${AWS::Partition}:s3:::public-file-browser-logging-${Unique}/*
-                - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+                - Unique: !Select
+                    - 4
+                    - !Split
+                      - '-'
+                      - !Select
+                        - 2
+                        - !Split
+                          - /
+                          - !Ref AWS::StackId
             Condition:
               Bool:
                 aws:SecureTransport: 'false'
+  AthenaWorkGroup:
+    Type: AWS::Athena::WorkGroup
+    Properties:
+      Name: !Sub ${AWS::StackName}-logging-analysis
+      RecursiveDeleteOption: true
+      WorkGroupConfiguration:
+        EnforceWorkGroupConfiguration: true
+        PublishCloudWatchMetricsEnabled: true
+        ResultConfiguration:
+          OutputLocation: !Sub s3://${LoggingBucket}/athena-results/
+
+  AthenaDatabase:
+    Type: AWS::Athena::Database
+    Properties:
+      DatabaseInput:
+        Name: !Sub ${AWS::StackName}_logs
+      CatalogName: AwsDataCatalog
+
+  AthenaTable:
+    Type: AWS::Athena::Table
+    DependsOn: AthenaDatabase
+    Properties:
+      CatalogName: AwsDataCatalog
+      DatabaseName: !Ref AthenaDatabase
+      TableInput:
+        Name: s3_access_logs
+        TableType: EXTERNAL_TABLE
+        Parameters:
+          classification: csv
+        StorageDescriptor:
+          Location: !Sub s3://${LoggingBucket}/
+          InputFormat: org.apache.hadoop.mapred.TextInputFormat
+          OutputFormat: org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
+          SerdeInfo:
+            SerializationLibrary: org.apache.hadoop.hive.serde2.RegexSerDe
+            Parameters:
+              input.regex: ([^ ]*) ([^ ]*) \\[(.*?)\\] ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*)
+                "([^ ]*) ([^ ]*) (- |[^ ]*)" (-|[0-9]*) ([^ ]*) ([^ ]*) ([^ ]*)
+                ([^ ]*) ([^ ]*) ([^ ]*) "([^ ]*)" "([^ ]*)" ([^ ]*) ([^ ]*)
+          Columns:
+            - Name: bucketowner
+              Type: string
+            - Name: bucket_name
+              Type: string
+            - Name: requestdatetime
+              Type: string
+            - Name: remoteip
+              Type: string
+            - Name: requester
+              Type: string
+            - Name: requestid
+              Type: string
+            - Name: operation
+              Type: string
+            - Name: key
+              Type: string
+            - Name: request_uri
+              Type: string
+            - Name: httpstatus
+              Type: string
+            - Name: errorcode
+              Type: string
+            - Name: bytessent
+              Type: bigint
+            - Name: objectsize
+              Type: bigint
+            - Name: totaltime
+              Type: string
+            - Name: turnaroundtime
+              Type: string
+            - Name: referrer
+              Type: string
+            - Name: useragent
+              Type: string
+            - Name: versionid
+              Type: string
+            - Name: hostid
+              Type: string
+            - Name: sigv
+              Type: string
+            - Name: ciphersuite
+              Type: string
+            - Name: authtype
+              Type: string
+            - Name: endpoint
+              Type: string
+            - Name: tlsversion
+              Type: string
+
+  LoggingBucketDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    DependsOn:
+      - LoggingBucket
+      - AthenaTable
+    Properties:
+      DashboardName: !Sub
+        - public-file-browser-logging-dashboard-${Unique}
+        - Unique: !Select
+            - 4
+            - !Split
+              - '-'
+              - !Select
+                - 2
+                - !Split
+                  - /
+                  - !Ref AWS::StackId
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "log",
+              "x": 0,
+              "y": 0,
+              "width": 24,
+              "height": 12,
+              "properties": {
+                "query": "SELECT requestdatetime, remoteip, operation, key, httpstatus, referrer, useragent\nFROM \"${AthenaDatabase}\".s3_access_logs\nWHERE from_iso8601_timestamp(requestdatetime) > current_timestamp - interval '1' day\nORDER BY requestdatetime DESC\nLIMIT 100",
+                "region": "${AWS::Region}",
+                "title": "Recent S3 Access Logs",
+                "view": "table"
+              }
+            }
+          ]
+        }
+
   CloudFront:
     Type: AWS::CloudFront::Distribution
     DependsOn:
@@ -307,21 +577,36 @@ Resources:
       cfn_nag:
         rules_to_suppress:
           - id: W70
-            reason: When using the default CloudFront distribution domain you cannot specify the TLS version options. Changing from the default CloudFront distribution would significantly increase the scope and cost of the project by requiring the customer to select a custom domain, deploy a Route53 Hosted Zone, and generate an ACM Certificate.
+            reason: When using the default CloudFront distribution domain you cannot specify
+              the TLS version options. Changing from the default CloudFront
+              distribution would significantly increase the scope and cost of
+              the project by requiring the customer to select a custom domain,
+              deploy a Route53 Hosted Zone, and generate an ACM Certificate.
       cdk_nag:
         rules_to_suppress:
           - id: AwsSolutions-CFR1
-            reason: Implementing Geo-restrictions is not a valid assumption we can make for this solution.
+            reason: Implementing Geo-restrictions is not a valid assumption we can make for
+              this solution.
           - id: AwsSolutions-CFR2
             reason: aws:SecureTransport policy is properly implemented in the Bucket Policy
           - id: AwsSolutions-CFR4
-            reason: When using the default CloudFront distribution domain you cannot specify the TLS version options. Changing from the default CloudFront distribution would significantly increase the scope and cost of the project by requiring the customer to select a custom domain, deploy a Route53 Hosted Zone, and generate an ACM Certificate.
+            reason: When using the default CloudFront distribution domain you cannot specify
+              the TLS version options. Changing from the default CloudFront
+              distribution would significantly increase the scope and cost of
+              the project by requiring the customer to select a custom domain,
+              deploy a Route53 Hosted Zone, and generate an ACM Certificate.
       checkov:
         skip:
           - id: CKV_AWS_68
-            comment: WAF is not appropriate for this workload as it is a static website and would greatly increase the cost and complexity of the solution.
+            comment: WAF is not appropriate for this workload as it is a static website and
+              would greatly increase the cost and complexity of the solution.
           - id: CKV_AWS_174
-            comment: When using the default CloudFront distribution domain you cannot specify the TLS version options. Changing from the default CloudFront distribution would significantly increase the scope and cost of the project by requiring the customer to select a custom domain, deploy a Route53 Hosted Zone, and generate an ACM Certificate.
+            comment: When using the default CloudFront distribution domain you cannot
+              specify the TLS version options. Changing from the default
+              CloudFront distribution would significantly increase the scope and
+              cost of the project by requiring the customer to select a custom
+              domain, deploy a Route53 Hosted Zone, and generate an ACM
+              Certificate.
     Properties:
       DistributionConfig:
         Comment: Public File Browser for Amazon S3 Static Website
@@ -339,7 +624,7 @@ Resources:
         DefaultCacheBehavior:
           ForwardedValues:
             QueryString: true
-          TargetOriginId: !Sub 'S3-Public-Files'
+          TargetOriginId: !Sub S3-Public-Files
           ViewerProtocolPolicy: redirect-to-https
           Compress: true
           # Magic number: https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-managed-cache-policies.html#managed-cache-policies-list
@@ -348,7 +633,7 @@ Resources:
         CacheBehaviors:
           - ForwardedValues:
               QueryString: true
-            TargetOriginId: !Sub 'S3-Public-Website'
+            TargetOriginId: !Sub S3-Public-Website
             ViewerProtocolPolicy: redirect-to-https
             Compress: true
             PathPattern: pfb_for_s3/*
@@ -359,15 +644,31 @@ Resources:
         Origins:
           - DomainName: !Sub
               - public-file-browser-website-${Unique}.s3.${AWS::Region}.amazonaws.com
-              - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
-            Id: !Sub 'S3-Public-Website'
+              - Unique: !Select
+                  - 4
+                  - !Split
+                    - '-'
+                    - !Select
+                      - 2
+                      - !Split
+                        - /
+                        - !Ref AWS::StackId
+            Id: !Sub S3-Public-Website
             S3OriginConfig:
               OriginAccessIdentity: ''
             OriginAccessControlId: !GetAtt CloudFrontOriginAccessControl.Id
           - DomainName: !Sub
               - public-file-browser-files-${Unique}.s3.${AWS::Region}.amazonaws.com
-              - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
-            Id: !Sub 'S3-Public-Files'
+              - Unique: !Select
+                  - 4
+                  - !Split
+                    - '-'
+                    - !Select
+                      - 2
+                      - !Split
+                        - /
+                        - !Ref AWS::StackId
+            Id: !Sub S3-Public-Files
             S3OriginConfig:
               OriginAccessIdentity: ''
             OriginAccessControlId: !GetAtt CloudFrontOriginAccessControl.Id
@@ -380,19 +681,24 @@ Resources:
       cfn_nag:
         rules_to_suppress:
           - id: W89
-            reason: This does not increase the security of the solutions and greatly increases the cost and scope of the deployment.
+            reason: This does not increase the security of the solutions and greatly
+              increases the cost and scope of the deployment.
           - id: W92
-            reason: This is not necessary for this function as it is only executed during CloudFormation deployment and not related to end-user requests.
+            reason: This is not necessary for this function as it is only executed during
+              CloudFormation deployment and not related to end-user requests.
       checkov:
         skip:
           - id: CKV_AWS_173
             comment: Environment variables do not contain sensitive data.
           - id: CKV_AWS_117
-            comment: This does not increase the security of the solutions and greatly increases the cost and scope of the deployment.
+            comment: This does not increase the security of the solutions and greatly
+              increases the cost and scope of the deployment.
           - id: CKV_AWS_115
-            comment: Concurrency limit does not make sense for a Lambda Backed Custom Resource only used during stack deployment
+            comment: Concurrency limit does not make sense for a Lambda Backed Custom
+              Resource only used during stack deployment
           - id: CKV_AWS_116
-            comment: DLQ does not make sense for a Lambda Backed Custom Resource only used during stack deployment
+            comment: DLQ does not make sense for a Lambda Backed Custom Resource only used
+              during stack deployment
     Properties:
       CodeUri: seed_s3_data/
       Handler: app.handler
@@ -402,7 +708,7 @@ Resources:
         - arm64
       Environment:
         Variables:
-          LOGURU_LEVEL: 'DEBUG'
+          LOGURU_LEVEL: DEBUG
       Policies:
         # AWSLambdaBasicExecutionRole intentionally omitted. If allowed, it will create
         # a new log group during the deletion of the stack which cannot be cleaned up
@@ -411,13 +717,21 @@ Resources:
         - S3CrudPolicy:
             BucketName: !Sub
               - public-file-browser-website-${Unique}
-              - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+              - Unique: !Select
+                  - 4
+                  - !Split
+                    - '-'
+                    - !Select
+                      - 2
+                      - !Split
+                        - /
+                        - !Ref AWS::StackId
   SeedS3Data:
     Type: Custom::SeedS3Data
     Properties:
-      ServiceToken: !GetAtt 'CustomSeedS3Data.Arn'
-      SiteName: !Ref 'SiteName'
-      IdentityPoolId: !Ref 'CognitoIdentityPool'
+      ServiceToken: !GetAtt CustomSeedS3Data.Arn
+      SiteName: !Ref SiteName
+      IdentityPoolId: !Ref CognitoIdentityPool
       PublicWebsiteBucket: !Ref PublicWebsiteBucket
       FilesBucketName: !Ref PublicFilesBucket
       FilesOpenMode: !Ref FilesOpenTabMode
@@ -428,15 +742,25 @@ Resources:
       cdk_nag:
         rules_to_suppress:
           - id: AwsSolutions-COG7
-            reason: Unauthenticated identities are preferred for this application so users can anonymously but securely list contents of the S3 bucket.
+            reason: Unauthenticated identities are preferred for this application so users
+              can anonymously but securely list contents of the S3 bucket.
       cfn_nag:
         rules_to_suppress:
           - id: W57
-            reason: Unauthenticated identities are preferred for this application so users can anonymously but securely list contents of the S3 bucket.
+            reason: Unauthenticated identities are preferred for this application so users
+              can anonymously but securely list contents of the S3 bucket.
     Properties:
       IdentityPoolName: !Sub
         - public-file-browser-Identity-Pool-${Unique}
-        - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+        - Unique: !Select
+            - 4
+            - !Split
+              - '-'
+              - !Select
+                - 2
+                - !Split
+                  - /
+                  - !Ref AWS::StackId
       AllowUnauthenticatedIdentities: true
   CognitoIdentityUnauthenticatedRole:
     Type: AWS::IAM::Role
@@ -444,11 +768,22 @@ Resources:
       cfn_nag:
         rules_to_suppress:
           - id: W28
-            reason: While not ideal, this is necessary to prevent a circular dependency. The resource uses the stack-id as part of the resource name, and the only properties of an IAM Role requiring replacement are Path and RoleName.
+            reason: While not ideal, this is necessary to prevent a circular dependency. The
+              resource uses the stack-id as part of the resource name, and the
+              only properties of an IAM Role requiring replacement are Path and
+              RoleName.
     Properties:
       RoleName: !Sub
         - public-file-browser-Cognito-Unauth-${Unique}
-        - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+        - Unique: !Select
+            - 4
+            - !Split
+              - '-'
+              - !Select
+                - 2
+                - !Split
+                  - /
+                  - !Ref AWS::StackId
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -458,7 +793,7 @@ Resources:
             Action: sts:AssumeRoleWithWebIdentity
             Condition:
               StringEquals:
-                cognito-identity.amazonaws.com:aud: !Ref 'CognitoIdentityPool'
+                cognito-identity.amazonaws.com:aud: !Ref CognitoIdentityPool
               ForAnyValue:StringLike:
                 cognito-identity.amazonaws.com:amr: unauthenticated
       Policies:
@@ -472,21 +807,29 @@ Resources:
                 Resource:
                   - !Sub
                     - arn:${AWS::Partition}:s3:::public-file-browser-files-${Unique}
-                    - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+                    - Unique: !Select
+                        - 4
+                        - !Split
+                          - '-'
+                          - !Select
+                            - 2
+                            - !Split
+                              - /
+                              - !Ref AWS::StackId
   CognitoIdentityPoolRoleMapping:
     Type: AWS::Cognito::IdentityPoolRoleAttachment
     Properties:
-      IdentityPoolId: !Ref 'CognitoIdentityPool'
+      IdentityPoolId: !Ref CognitoIdentityPool
       Roles:
-        unauthenticated: !GetAtt 'CognitoIdentityUnauthenticatedRole.Arn'
+        unauthenticated: !GetAtt CognitoIdentityUnauthenticatedRole.Arn
 Outputs:
   FileBrowserURL:
     Description: The web URL for the deployed Public File Browser for Amazon S3 solution
-    Value: !Sub 'https://${CloudFront.DomainName}'
+    Value: !Sub https://${CloudFront.DomainName}
   PublicFilesBucket:
     Description: The name of the Amazon S3 Bucket for storing PUBLICLY ACCESSIBLE files.
-    Value: !Ref 'PublicFilesBucket'
+    Value: !Ref PublicFilesBucket
   WebInterfaceAppBucket:
-    Description: The name of the Amazon S3 Bucket for the HTML/JS/CSS pages that make up the file browser web interface.
-    Value: !Ref 'PublicWebsiteBucket'
-
+    Description: The name of the Amazon S3 Bucket for the HTML/JS/CSS pages that
+      make up the file browser web interface.
+    Value: !Ref PublicWebsiteBucket
