@@ -29,7 +29,7 @@ def seed_data(event, _):
         zip_ref.extractall('/tmp/website/')                      # nosec hardcoded_tmp_directory
     path = '/tmp/website/website'                                # nosec hardcoded_tmp_directory
     # Replace placeholder config values with Lambda inputs
-    for file_name in ['index.html', 'icon/site.webmanifest']:
+    for file_name in ['index.html', 'icon/site.webmanifest', 'error.html']:
         config_path = os.path.join(path, file_name)
         logger.debug(f"Modifying Website Config {config_path}...")
         with open(config_path, 'r') as file:
@@ -53,11 +53,13 @@ def seed_data(event, _):
                 object_key = full_path[len(path) + 1:]
                 logger.debug(
                     f"Uploading: {full_path} -> s3://{event['ResourceProperties']['PublicWebsiteBucket']}/pfb_for_s3/{object_key}")
+                cache_control = 'no-cache' if file.endswith('.html') else 'max-age=86400, public'
                 s3.put_object(
                     Bucket=event['ResourceProperties']['PublicWebsiteBucket'],
                     Key='pfb_for_s3/' + object_key,
                     Body=data,
-                    ContentType=mimetypes.guess_type(full_path)[0] or 'application/octet-stream'
+                    ContentType=mimetypes.guess_type(full_path)[0] or 'application/octet-stream',
+                    CacheControl=cache_control
                 )
 
 

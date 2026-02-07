@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install dependencies
+        working-directory: sam
+        run: |
+          pip install -r seed_s3_data/requirements.txt
+          pip install -r tests/requirements.txt
+      - name: Run unit tests
+        working-directory: sam
+        run: python -m pytest tests/unit/test_seed_s3_data.py -v

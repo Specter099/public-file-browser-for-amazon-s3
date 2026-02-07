@@ -136,6 +136,11 @@ function renderTable(prefix, start_at = '') {
     s3.listObjectsV2(params, function(err, data) {
         if (err) {
             console.log(err, err.stack);
+            $('#listingBody').html(
+                '<tr><td colspan="5" class="text-center text-danger py-4">' +
+                '<i class="bi bi-exclamation-triangle"></i> ' +
+                'Unable to load file listing. Please try again later.</td></tr>'
+            );
         } else {
             let newRows = ''
             //console.log(data);
@@ -249,7 +254,7 @@ function getRow(item, prefix, isNavToParent = false) {
         objModifiedMouseover = dt.toRelative()
         objLink = '/' + encodeURI(objKey)
         if (awsConfigOptions.files_open_in_new_tab) {
-            objTarget = ' target="_blank"'
+            objTarget = ' target="_blank" rel="noopener noreferrer"'
         }
     }
     if (!isNavToParent && objKey.substring(0, prefix.length) == prefix) {

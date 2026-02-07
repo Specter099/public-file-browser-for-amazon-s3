@@ -26,6 +26,8 @@ Parameters:
     Description: First deployment set to "*", all subsequent deployments set to value of the FileBrowserURL CloudFormation output
     Default: '*'
 Transform: AWS::Serverless-2016-10-31
+Conditions:
+  IsUsEast1: !Equals [!Ref 'AWS::Region', 'us-east-1']
 Resources:
   CloudFrontOriginAccessControl:
     Type: AWS::CloudFront::OriginAccessControl
@@ -38,6 +40,30 @@ Resources:
         OriginAccessControlOriginType: s3
         SigningBehavior: always
         SigningProtocol: sigv4
+  SecurityHeadersPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub
+          - public-file-browser-security-headers-${Unique}
+          - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+        SecurityHeadersConfig:
+          ContentSecurityPolicy:
+            ContentSecurityPolicy: "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self' https://*.amazonaws.com; manifest-src 'self'; base-uri 'self'; form-action 'none'"
+            Override: true
+          ContentTypeOptions:
+            Override: true
+          FrameOptions:
+            FrameOption: DENY
+            Override: true
+          ReferrerPolicy:
+            ReferrerPolicy: strict-origin-when-cross-origin
+            Override: true
+          StrictTransportSecurity:
+            AccessControlMaxAgeSec: 63072000
+            IncludeSubdomains: true
+            Preload: true
+            Override: true
   PublicWebsiteBucket:
     Type: AWS::S3::Bucket
     Metadata:
@@ -70,6 +96,9 @@ Resources:
             Status: Enabled
             NoncurrentVersionExpiration:
               NoncurrentDays: 90
+      Tags:
+        - Key: Project
+          Value: PublicFileBrowserForS3
   PublicFilesBucket:
     Type: AWS::S3::Bucket
     Metadata:
@@ -118,6 +147,9 @@ Resources:
               - ETag
             Id: CORSRule
             MaxAge: 3600
+      Tags:
+        - Key: Project
+          Value: PublicFileBrowserForS3
   PublicWebsiteBucketBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Metadata:
@@ -245,6 +277,12 @@ Resources:
             Status: Enabled
             NoncurrentVersionExpiration:
               NoncurrentDays: 90
+          - Id: ExpireLogsAfter365Days
+            Status: Enabled
+            ExpirationInDays: 365
+      Tags:
+        - Key: Project
+          Value: PublicFileBrowserForS3
   LoggingBucketBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Metadata:
@@ -341,6 +379,7 @@ Resources:
           Compress: true
           # Magic number: https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-managed-cache-policies.html#managed-cache-policies-list
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          ResponseHeadersPolicyId: !Ref SecurityHeadersPolicy
         DefaultRootObject: pfb_for_s3/index.html
         CacheBehaviors:
           - ForwardedValues:
@@ -351,8 +390,18 @@ Resources:
             PathPattern: pfb_for_s3/*
             # Magic number: https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-managed-cache-policies.html#managed-cache-policies-list
             CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+            ResponseHeadersPolicyId: !Ref SecurityHeadersPolicy
         Enabled: true
-        HttpVersion: http2
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponsePagePath: /pfb_for_s3/error.html
+            ResponseCode: 404
+            ErrorCachingMinTTL: 60
+          - ErrorCode: 404
+            ResponsePagePath: /pfb_for_s3/error.html
+            ResponseCode: 404
+            ErrorCachingMinTTL: 60
+        HttpVersion: http2and3
         Origins:
           - DomainName: !Sub
               - public-file-browser-website-${Unique}.s3.${AWS::Region}.amazonaws.com
@@ -370,6 +419,9 @@ Resources:
             OriginAccessControlId: !GetAtt CloudFrontOriginAccessControl.Id
         PriceClass: PriceClass_100
         IPV6Enabled: false
+      Tags:
+        - Key: Project
+          Value: PublicFileBrowserForS3
   CustomSeedS3Data:
     # Logging disabled on this function
     Type: AWS::Serverless::Function
@@ -400,6 +452,8 @@ Resources:
       Environment:
         Variables:
           LOGURU_LEVEL: 'DEBUG'
+      Tags:
+        Project: PublicFileBrowserForS3
       Policies:
         # AWSLambdaBasicExecutionRole intentionally omitted. If allowed, it will create
         # a new log group during the deletion of the stack which cannot be cleaned up
@@ -470,12 +524,36 @@ Resources:
                   - !Sub
                     - arn:${AWS::Partition}:s3:::public-file-browser-files-${Unique}
                     - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+      Tags:
+        - Key: Project
+          Value: PublicFileBrowserForS3
   CognitoIdentityPoolRoleMapping:
     Type: AWS::Cognito::IdentityPoolRoleAttachment
     Properties:
       IdentityPoolId: !Ref 'CognitoIdentityPool'
       Roles:
         unauthenticated: !GetAtt 'CognitoIdentityUnauthenticatedRole.Arn'
+  CloudFront5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsUsEast1
+    Properties:
+      AlarmName: !Sub
+        - public-file-browser-5xx-alarm-${Unique}
+        - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+      AlarmDescription: CloudFront 5xx error rate exceeded 5% threshold
+      Namespace: AWS/CloudFront
+      MetricName: 5xxErrorRate
+      Dimensions:
+        - Name: DistributionId
+          Value: !Ref CloudFront
+        - Name: Region
+          Value: Global
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
 Outputs:
   FileBrowserURL:
     Description: The web URL for the deployed Public File Browser for Amazon S3 solution
