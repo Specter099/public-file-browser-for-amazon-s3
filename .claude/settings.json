@@ -55,5 +55,22 @@
       "Bash(git rebase *)",
       "Bash(gh pr merge *)"
     ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "find . -maxdepth 1 \\( -name \"*.yaml\" -o -name \"*.yml\" \\) -exec cfn-lint {} + 2>&1 || true"
+          },
+          {
+            "type": "command",
+            "command": "find . -maxdepth 1 \\( -name \"*.yaml\" -o -name \"*.yml\" \\) -exec yamllint -d relaxed {} + 2>&1 || true"
+          }
+        ]
+      }
+    ]
   }
 }
