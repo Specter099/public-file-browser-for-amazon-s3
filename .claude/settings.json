@@ -72,5 +72,9 @@
         ]
       }
     ]
-  }
+  },
+  "allowedTools": [
+    "Bash(cfn-lint*)",
+    "Bash(yamllint*)"
+  ]
 }
