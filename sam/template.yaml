@@ -8,8 +8,12 @@ Description: >
 Parameters:
   SiteName:
     Type: String
-    Description: Friendly Site Name displayed in the header and title of the website.
+    Description: 'Friendly Site Name displayed in the header and title of the website. Restricted to alphanumeric characters and a small set of safe punctuation to prevent HTML/JS injection at deploy time.'
     Default: AnyCompany Public Files
+    MinLength: 1
+    MaxLength: 80
+    AllowedPattern: '^[A-Za-z0-9 .,''\-_:()]+$'
+    ConstraintDescription: 'SiteName must be 1-80 characters, alphanumeric plus space and the punctuation . , '' - _ : ( )'
   FilesOpenTabMode:
     Type: String
     Description: How do files open when clicked
@@ -21,10 +25,14 @@ Parameters:
     Type: String
     Description: Comma-delimited list of storage classes to SHOW in directory listings. See S3 GetObject API Reference for possible values.
     Default: STANDARD,STANDARD_IA,ONEZONE_IA,REDUCED_REDUNDANCY
+    AllowedPattern: '^[A-Z_]+(,[A-Z_]+)*$'
+    ConstraintDescription: 'VisibleStorageClasses must be a comma-separated list of S3 storage class identifiers (uppercase letters and underscores).'
   CrossOriginRestriction:
     Type: String
-    Description: First deployment set to "*", all subsequent deployments set to value of the FileBrowserURL CloudFormation output
+    Description: 'First deployment set to "*", subsequent deployments set to the FileBrowserURL CloudFormation output (e.g. https://d111111abcdef8.cloudfront.net). No trailing slash.'
     Default: '*'
+    AllowedPattern: '^(\*|https://[A-Za-z0-9.-]+(:[0-9]+)?)$'
+    ConstraintDescription: 'Must be either "*" or an https origin (no trailing slash).'
 Transform: AWS::Serverless-2016-10-31
 Resources:
   CloudFrontOriginAccessControl:
@@ -34,7 +42,7 @@ Resources:
         Description: Public File Browser for Amazon S3
         Name: !Sub
           - public-file-browser-${Unique}
-          - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+          - Unique: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
         OriginAccessControlOriginType: s3
         SigningBehavior: always
         SigningProtocol: sigv4
@@ -48,7 +56,7 @@ Resources:
     Properties:
       BucketName: !Sub
         - public-file-browser-website-${Unique}
-        - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+        - Unique: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
       AccessControl: Private
       LoggingConfiguration:
         DestinationBucketName: !Ref LoggingBucket
@@ -80,7 +88,7 @@ Resources:
     Properties:
       BucketName: !Sub
         - public-file-browser-files-${Unique}
-        - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+        - Unique: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
       AccessControl: Private
       LoggingConfiguration:
         DestinationBucketName: !Ref LoggingBucket
@@ -129,7 +137,7 @@ Resources:
     Properties:
       Bucket: !Sub
         - public-file-browser-website-${Unique}
-        - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+        - Unique: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
       PolicyDocument:
         Version: '2012-10-17'
         Id: WebAccess
@@ -143,7 +151,7 @@ Resources:
               - s3:GetObjectVersion
             Resource: !Sub
               - arn:${AWS::Partition}:s3:::public-file-browser-website-${Unique}/*
-              - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+              - Unique: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
             Condition:
               StringEquals:
                 AWS:SourceArn: !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${CloudFront}
@@ -154,10 +162,10 @@ Resources:
             Resource:
               - !Sub
                 - arn:${AWS::Partition}:s3:::public-file-browser-website-${Unique}
-                - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+                - Unique: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
               - !Sub
                 - arn:${AWS::Partition}:s3:::public-file-browser-website-${Unique}/*
-                - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+                - Unique: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
             Condition:
               Bool:
                 aws:SecureTransport: 'false'
@@ -172,7 +180,7 @@ Resources:
     Properties:
       Bucket: !Sub
         - public-file-browser-files-${Unique}
-        - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+        - Unique: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
       PolicyDocument:
         Version: '2012-10-17'
         Id: WebAccess
@@ -186,7 +194,7 @@ Resources:
               - s3:GetObjectVersion
             Resource: !Sub
               - arn:${AWS::Partition}:s3:::public-file-browser-files-${Unique}/*
-              - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+              - Unique: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
             Condition:
               StringEquals:
                 AWS:SourceArn: !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${CloudFront}
@@ -197,10 +205,10 @@ Resources:
             Resource:
               - !Sub
                 - arn:${AWS::Partition}:s3:::public-file-browser-files-${Unique}
-                - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+                - Unique: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
               - !Sub
                 - arn:${AWS::Partition}:s3:::public-file-browser-files-${Unique}/*
-                - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+                - Unique: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
             Condition:
               Bool:
                 aws:SecureTransport: 'false'
@@ -223,7 +231,7 @@ Resources:
     Properties:
       BucketName: !Sub
         - public-file-browser-logging-${Unique}
-        - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+        - Unique: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
       AccessControl: Private
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -256,7 +264,7 @@ Resources:
     Properties:
       Bucket: !Sub
         - public-file-browser-logging-${Unique}
-        - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+        - Unique: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
       PolicyDocument:
         Version: '2012-10-17'
         Id: WebAccess
@@ -269,16 +277,16 @@ Resources:
               - s3:PutObject
             Resource: !Sub
               - arn:${AWS::Partition}:s3:::public-file-browser-logging-${Unique}/*
-              - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+              - Unique: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
             Condition:
               ArnEquals:
                 aws:SourceArn:
                   - !Sub
                     - arn:${AWS::Partition}:s3:::public-file-browser-website-${Unique}
-                    - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+                    - Unique: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
                   - !Sub
                     - arn:${AWS::Partition}:s3:::public-file-browser-files-${Unique}
-                    - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+                    - Unique: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
               StringEquals:
                 aws:SourceAccount: !Ref 'AWS::AccountId'
           - Sid: DenyPlaintextAccess
@@ -288,13 +296,35 @@ Resources:
             Resource:
               - !Sub
                 - arn:${AWS::Partition}:s3:::public-file-browser-logging-${Unique}
-                - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+                - Unique: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
               - !Sub
                 - arn:${AWS::Partition}:s3:::public-file-browser-logging-${Unique}/*
-                - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+                - Unique: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
             Condition:
               Bool:
                 aws:SecureTransport: 'false'
+  SecurityResponseHeadersPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub
+          - public-file-browser-headers-${Unique}
+          - Unique: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
+        Comment: Security response headers for the Public File Browser distribution.
+        SecurityHeadersConfig:
+          StrictTransportSecurity:
+            AccessControlMaxAgeSec: 31536000
+            IncludeSubdomains: true
+            Preload: true
+            Override: true
+          ContentTypeOptions:
+            Override: true
+          ReferrerPolicy:
+            ReferrerPolicy: strict-origin-when-cross-origin
+            Override: true
+          FrameOptions:
+            FrameOption: DENY
+            Override: true
   CloudFront:
     Type: AWS::CloudFront::Distribution
     DependsOn:
@@ -332,38 +362,36 @@ Resources:
         Logging:
           Bucket: !GetAtt LoggingBucket.DomainName
           Prefix: cloudfront
-          IncludeCookies: true
+          IncludeCookies: false
         DefaultCacheBehavior:
-          ForwardedValues:
-            QueryString: true
           TargetOriginId: !Sub 'S3-Public-Files'
           ViewerProtocolPolicy: redirect-to-https
           Compress: true
           # Magic number: https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-managed-cache-policies.html#managed-cache-policies-list
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          ResponseHeadersPolicyId: !Ref SecurityResponseHeadersPolicy
         DefaultRootObject: pfb_for_s3/index.html
         CacheBehaviors:
-          - ForwardedValues:
-              QueryString: true
-            TargetOriginId: !Sub 'S3-Public-Website'
+          - TargetOriginId: !Sub 'S3-Public-Website'
             ViewerProtocolPolicy: redirect-to-https
             Compress: true
             PathPattern: pfb_for_s3/*
             # Magic number: https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-managed-cache-policies.html#managed-cache-policies-list
             CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+            ResponseHeadersPolicyId: !Ref SecurityResponseHeadersPolicy
         Enabled: true
         HttpVersion: http2
         Origins:
           - DomainName: !Sub
               - public-file-browser-website-${Unique}.s3.${AWS::Region}.amazonaws.com
-              - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+              - Unique: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
             Id: !Sub 'S3-Public-Website'
             S3OriginConfig:
               OriginAccessIdentity: ''
             OriginAccessControlId: !GetAtt CloudFrontOriginAccessControl.Id
           - DomainName: !Sub
               - public-file-browser-files-${Unique}.s3.${AWS::Region}.amazonaws.com
-              - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+              - Unique: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
             Id: !Sub 'S3-Public-Files'
             S3OriginConfig:
               OriginAccessIdentity: ''
@@ -399,7 +427,7 @@ Resources:
         - arm64
       Environment:
         Variables:
-          LOGURU_LEVEL: 'DEBUG'
+          LOGURU_LEVEL: 'INFO'
       Policies:
         # AWSLambdaBasicExecutionRole intentionally omitted. If allowed, it will create
         # a new log group during the deletion of the stack which cannot be cleaned up
@@ -408,7 +436,7 @@ Resources:
         - S3CrudPolicy:
             BucketName: !Sub
               - public-file-browser-website-${Unique}
-              - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+              - Unique: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
   SeedS3Data:
     Type: Custom::SeedS3Data
     Properties:
@@ -433,7 +461,7 @@ Resources:
     Properties:
       IdentityPoolName: !Sub
         - public-file-browser-Identity-Pool-${Unique}
-        - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+        - Unique: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
       AllowUnauthenticatedIdentities: true
   CognitoIdentityUnauthenticatedRole:
     Type: AWS::IAM::Role
@@ -445,7 +473,7 @@ Resources:
     Properties:
       RoleName: !Sub
         - public-file-browser-Cognito-Unauth-${Unique}
-        - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+        - Unique: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -469,7 +497,7 @@ Resources:
                 Resource:
                   - !Sub
                     - arn:${AWS::Partition}:s3:::public-file-browser-files-${Unique}
-                    - Unique: !Select [ 4, !Split [ '-', !Select [ 2, !Split [ '/', !Ref 'AWS::StackId' ] ] ] ]
+                    - Unique: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
   CognitoIdentityPoolRoleMapping:
     Type: AWS::Cognito::IdentityPoolRoleAttachment
     Properties:
@@ -486,4 +514,3 @@ Outputs:
   WebInterfaceAppBucket:
     Description: The name of the Amazon S3 Bucket for the HTML/JS/CSS pages that make up the file browser web interface.
     Value: !Ref 'PublicWebsiteBucket'
-

@@ -109,10 +109,11 @@ function generate_title_breadcrumbs(prefix) {
     let title_text = '<a class="link-dark" href="' + objLink + '"' + onClick + '>Home</a> / '
     let prior_paths = ''
     for (const item of prefix_split) {
+        if (item === '') continue
         prior_paths += item + '/'
-        objLink = '/?p=' + prior_paths
+        objLink = '/?p=' + escapeHtml(encodeURI(prior_paths))
         onClick = ' onclick="return localNav(\'' + btoa(prior_paths) + '\');"'
-        title_text += '<a class="link-dark" href="' + objLink + '"' + onClick + '>' + decodeURI(item) + '</a> / '
+        title_text += '<a class="link-dark" href="' + objLink + '"' + onClick + '>' + escapeHtml(decodeURI(item)) + '</a> / '
     }
     return title_text.substring(0, title_text.length - 3)
 }
@@ -199,8 +200,8 @@ function get_display_order(data) {
 }
 
 function getPagination(prefix, start_at) {
-    objLink = '/?p=' + prefix + '&s=' + start_at
-    onClick = ' onclick="return localNav(\'' + btoa(prefix) + '\', \'' + btoa(start_at) + '\');"'
+    const objLink = '/?p=' + escapeHtml(encodeURI(prefix)) + '&s=' + escapeHtml(encodeURI(start_at))
+    const onClick = ' onclick="return localNav(\'' + btoa(prefix) + '\', \'' + btoa(start_at) + '\');"'
     return '            <tr id="object_row">\n' +
         '                <td class="row_pagination" colspan="5" ><a href="' + objLink + '"' + onClick + '>Next »</a></td>\n' +
         '            </tr>';
@@ -249,7 +250,7 @@ function getRow(item, prefix, isNavToParent = false) {
         objModifiedMouseover = dt.toRelative()
         objLink = '/' + encodeURI(objKey)
         if (awsConfigOptions.files_open_in_new_tab) {
-            objTarget = ' target="_blank"'
+            objTarget = ' target="_blank" rel="noopener noreferrer"'
         }
     }
     if (!isNavToParent && objKey.substring(0, prefix.length) == prefix) {
@@ -257,11 +258,11 @@ function getRow(item, prefix, isNavToParent = false) {
     }
     let newRow =
         '            <tr id="object_row">\n' +
-        '                <td class="row_icon"><i class="bi ' + objIcon + '"></i></td>\n' +
-        '                <td class="row_key"><a href="' + objLink + '"' + onClick + objTarget + '>' + escapeHtml(objKey) + '</a></td>\n' +
-        '                <td class="row_size"><span title="' + objSizeMouseover + '">' + objSize + '</span></td>\n' +
-        '                <td class="row_modified"><span title="' + objModifiedMouseover + '">' + objModified + '</span></td>\n' +
-        '                <td class="row_class">' + objClass + '</td>\n' +
+        '                <td class="row_icon"><i class="bi ' + escapeHtml(objIcon) + '"></i></td>\n' +
+        '                <td class="row_key"><a href="' + escapeHtml(objLink) + '"' + onClick + objTarget + '>' + escapeHtml(objKey) + '</a></td>\n' +
+        '                <td class="row_size"><span title="' + escapeHtml(objSizeMouseover) + '">' + escapeHtml(objSize) + '</span></td>\n' +
+        '                <td class="row_modified"><span title="' + escapeHtml(objModifiedMouseover) + '">' + escapeHtml(objModified) + '</span></td>\n' +
+        '                <td class="row_class">' + escapeHtml(objClass) + '</td>\n' +
         '            </tr>';
     return newRow
 }

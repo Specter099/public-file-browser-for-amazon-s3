@@ -1,9 +1,8 @@
 import os
-from unittest import mock
 
 import boto3
 import pytest
-from moto import mock_s3, mock_apigateway
+from moto import mock_s3  # type: ignore[attr-defined]
 
 from sam.seed_s3_data import app
 
@@ -25,81 +24,102 @@ def cloudformation_event():
             "SiteName": "TEST_SITE_NAME",
             "IdentityPoolId": "TEST_IDENTITY_POOL",
             "FilesBucketName": "test-bucket-files",
-            "VisibleStorageClasses": "STANDARD,STANDARD_IA,ONEZONE_IA,REDUCED_REDUNDANCY"
-        }
+            "VisibleStorageClasses": "STANDARD,STANDARD_IA,ONEZONE_IA,REDUCED_REDUNDANCY",
+        },
     }
 
 
 @mock_s3
 def test_seed_data(cloudformation_event):
     boto3.setup_default_session()
-    s3 = boto3.client('s3')
-    website_bucket = s3.create_bucket(
-        Bucket='test-bucket-static-website',
-        CreateBucketConfiguration={'LocationConstraint': 'us-west-2'}
+    s3 = boto3.client("s3")
+    s3.create_bucket(
+        Bucket="test-bucket-static-website",
+        CreateBucketConfiguration={"LocationConstraint": "us-west-2"},
     )
-    files_bucket = s3.create_bucket(
-        Bucket='test-bucket-files',
-        CreateBucketConfiguration={'LocationConstraint': 'us-west-2'}
+    s3.create_bucket(
+        Bucket="test-bucket-files",
+        CreateBucketConfiguration={"LocationConstraint": "us-west-2"},
     )
-    os.chdir('seed_s3_data')
-    ret = app.seed_data(cloudformation_event, None)
+    os.chdir("seed_s3_data")
+    app.seed_data(cloudformation_event, None)
 
-    with open('/tmp/website/website/index.html', 'r') as file:                        # nosec hardcoded_tmp_directory
+    with open("/tmp/website/website/index.html", "r") as file:  # nosec hardcoded_tmp_directory
         config_data = file.read()
-        assert 'test-bucket-files' in config_data                                     # nosec assert_used
-        assert 'TEST_SITE_NAME' in config_data                                        # nosec assert_used
-        assert 'TEST_IDENTITY_POOL' in config_data                                    # nosec assert_used
-        assert 'STANDARD,STANDARD_IA,ONEZONE_IA,REDUCED_REDUNDANCY' in config_data    # nosec assert_used
-        assert 'files_open_in_new_tab: true' in config_data                           # nosec assert_used
-    response = s3.list_objects_v2(
-        Bucket='test-bucket-static-website'
-    )
-    assert response['KeyCount'] > 0                                                   # nosec assert_used
+        assert "test-bucket-files" in config_data  # nosec assert_used
+        assert "TEST_SITE_NAME" in config_data  # nosec assert_used
+        assert "TEST_IDENTITY_POOL" in config_data  # nosec assert_used
+        assert "STANDARD,STANDARD_IA,ONEZONE_IA,REDUCED_REDUNDANCY" in config_data  # nosec assert_used
+        assert "files_open_in_new_tab: true" in config_data  # nosec assert_used
+    response = s3.list_objects_v2(Bucket="test-bucket-static-website")
+    assert response["KeyCount"] > 0  # nosec assert_used
+
 
 @mock_s3
 def test_seed_data_with_existing_data(cloudformation_event):
     boto3.setup_default_session()
-    s3 = boto3.client('s3')
-    website_bucket = s3.create_bucket(
-        Bucket='test-bucket-static-website',
-        CreateBucketConfiguration={'LocationConstraint': 'us-west-2'}
+    s3 = boto3.client("s3")
+    s3.create_bucket(
+        Bucket="test-bucket-static-website",
+        CreateBucketConfiguration={"LocationConstraint": "us-west-2"},
     )
-    images_bucket = s3.create_bucket(
-        Bucket='test-bucket-files',
-        CreateBucketConfiguration={'LocationConstraint': 'us-west-2'}
+    s3.create_bucket(
+        Bucket="test-bucket-files",
+        CreateBucketConfiguration={"LocationConstraint": "us-west-2"},
     )
     s3.put_object(
-        Bucket='test-bucket-static-website',
-        Key='test-data-object',
-        Body=b'test-data'
+        Bucket="test-bucket-static-website", Key="test-data-object", Body=b"test-data"
     )
-    ret = app.seed_data(cloudformation_event, None)
-    response = s3.list_objects_v2(
-        Bucket='test-bucket-static-website'
+    app.seed_data(cloudformation_event, None)
+    response = s3.list_objects_v2(Bucket="test-bucket-static-website")
+    assert response["KeyCount"] == 1  # nosec assert_used
+
+
+@mock_s3
+def test_seed_data_preserves_sitename_verbatim(cloudformation_event):
+    # Defense-in-depth: SiteName CFN parameter is restricted by AllowedPattern in template.yaml,
+    # but verify the Lambda substitutes the value verbatim into both the HTML and the JS string
+    # context so we can spot template-injection regressions if the AllowedPattern is ever loosened.
+    boto3.setup_default_session()
+    s3 = boto3.client("s3")
+    s3.create_bucket(
+        Bucket="test-bucket-static-website",
+        CreateBucketConfiguration={"LocationConstraint": "us-west-2"},
     )
-    assert response['KeyCount'] == 1                             # nosec assert_used
+    s3.create_bucket(
+        Bucket="test-bucket-files",
+        CreateBucketConfiguration={"LocationConstraint": "us-west-2"},
+    )
+    cloudformation_event["ResourceProperties"]["SiteName"] = "Acme Co. (Internal)"
+    if os.path.basename(os.getcwd()) != "seed_s3_data":
+        os.chdir("seed_s3_data")
+    app.seed_data(cloudformation_event, None)
+    with open("/tmp/website/website/index.html", "r") as f:  # nosec hardcoded_tmp_directory
+        html = f.read()
+    assert "Acme Co. (Internal)" in html  # nosec assert_used
+    # Placeholder must be fully substituted — none should remain.
+    assert "###REPLACE_ME_SITE_NAME###" not in html  # nosec assert_used
+    assert "###REPLACE_ME_IDENTITY_POOL_ID###" not in html  # nosec assert_used
+    assert "###REPLACE_ME_BUCKET_NAME###" not in html  # nosec assert_used
+    assert "###REPLACE_ME_FILES_OPEN_MODE###" not in html  # nosec assert_used
+    assert "###REPLACE_ME_VISIBLE_STORAGE_CLASSES###" not in html  # nosec assert_used
 
 
 @mock_s3
 def test_delete_data_with_existing_data(cloudformation_event):
     boto3.setup_default_session()
-    s3 = boto3.client('s3')
-    website_bucket = s3.create_bucket(
-        Bucket='test-bucket-static-website',
-        CreateBucketConfiguration={'LocationConstraint': 'us-west-2'}
+    s3 = boto3.client("s3")
+    s3.create_bucket(
+        Bucket="test-bucket-static-website",
+        CreateBucketConfiguration={"LocationConstraint": "us-west-2"},
     )
-    images_bucket = s3.create_bucket(
-        Bucket='test-bucket-files',
-        CreateBucketConfiguration={'LocationConstraint': 'us-west-2'}
+    s3.create_bucket(
+        Bucket="test-bucket-files",
+        CreateBucketConfiguration={"LocationConstraint": "us-west-2"},
     )
     s3.put_object(
-        Bucket='test-bucket-static-website',
-        Key='test-data-object',
-        Body=b'test-data'
+        Bucket="test-bucket-static-website", Key="test-data-object", Body=b"test-data"
     )
-    ret = app.delete_data(cloudformation_event, None)
-    response = s3.list_objects_v2(
-        Bucket='test-bucket-static-website'
-    )
-    assert response['KeyCount'] == 0                             # nosec assert_used
+    app.delete_data(cloudformation_event, None)
+    response = s3.list_objects_v2(Bucket="test-bucket-static-website")
+    assert response["KeyCount"] == 0  # nosec assert_used
