@@ -29,6 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   checks `config.json` is present, valid, and fully substituted.
 
 ### Changed
+- CDK: CloudFront access logs now use **standard logging v2**
+  (`AWS::Logs::DeliverySource`/`DeliveryDestination`/`Delivery`) instead of the
+  distribution's legacy `Logging` block, and the logging bucket disables ACLs
+  (`BUCKET_OWNER_ENFORCED`). Legacy logging delivers by granting the
+  `awslogsdelivery` account a bucket ACL and so requires ACLs to stay enabled;
+  v2 delivers via a bucket policy, so they can be disabled outright. The SAM
+  template is unchanged and still uses legacy logging.
 - **Frontend rebuilt** as a React + TypeScript single-page app (Vite, Tailwind
   CSS), replacing the vanilla HTML/CSS/JS site and its vendored jQuery,
   Bootstrap, and Luxon libraries. Deployment is still a static upload.
