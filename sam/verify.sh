@@ -9,12 +9,20 @@
 #   2. HSTS contents are max-age=31536000; includeSubDomains; preload
 #   3. http:// redirects to https://
 #   4. Reflected-XSS regression: ?p=<img src=x onerror=alert(1)>/ is not reflected literally
-#   5. Subresource Integrity attributes are present on the vendor <script> tags
+#   5. Subresource Integrity attributes on the bundled JS/CSS assets, and each
+#      declared digest matches the asset actually served
+#   6. config.json is present, fully substituted, and valid JSON
 #
 # Browser-only checks not covered here (run by hand):
-#   - Tamper one byte of a vendor JS in S3, reload, expect SRI mismatch in DevTools.
 #   - Upload an S3 object with a double-quote in the key; confirm the listing renders safely.
 #   - Stack update with SiteName='</title><script>alert(1)</script>' should be rejected by AllowedPattern.
+#   - Toggle the OS light/dark setting and confirm the theme follows it before any click.
+#
+# Note on check 4: the frontend is a client-rendered single-page app, so the
+# served HTML never contains the query string at all. That makes this a weaker
+# signal than it was against the pre-rebuild server-rendered markup -- it now
+# confirms only that no reflection was introduced. The real breadcrumb-escaping
+# regression test is `describe("security")` in frontend/src/App.test.tsx.
 
 set -u
 
@@ -102,13 +110,74 @@ else
   check "XSS regression: payload not reflected literally" ok
 fi
 
-# 5. SRI on vendor scripts
+# 5. SRI on the bundled assets, verified against what the CDN actually serves.
+#    The bundle is content-hashed, so the digests must be recomputed from the
+#    fetched bytes -- a stale or wrong hash makes the browser refuse to execute
+#    the bundle and the page renders blank with no server-side symptom.
 sri_count=$(grep -oE 'integrity="sha384-[A-Za-z0-9+/=]+"' "$body_file" | wc -l | tr -d ' ')
-if [[ "$sri_count" -ge 4 ]]; then
-  check "SRI: $sri_count integrity attributes on vendor scripts" ok
+if [[ "$sri_count" -ge 2 ]]; then
+  check "SRI: $sri_count integrity attributes on bundled assets" ok
 else
-  check "SRI: integrity attributes on 4+ vendor scripts" "found $sri_count, expected >=4"
+  check "SRI: integrity attributes on bundled assets" "found $sri_count, expected >=2 (a JS entry and a stylesheet)"
 fi
+
+sri_mismatches=0
+sri_verified=0
+# Pair each asset URL with the integrity value declared on the same tag.
+while read -r asset_path declared; do
+  [[ -z "$asset_path" || -z "$declared" ]] && continue
+  asset_body=$(mktemp)
+  if curl -fsSL -o "$asset_body" "$url$asset_path" 2>/dev/null; then
+    actual="sha384-$(openssl dgst -sha384 -binary "$asset_body" | openssl base64 -A)"
+    if [[ "$actual" == "$declared" ]]; then
+      sri_verified=$((sri_verified + 1))
+    else
+      sri_mismatches=$((sri_mismatches + 1))
+      printf '       %s\n         declared: %s\n         actual:   %s\n' \
+        "$asset_path" "$declared" "$actual" >&2
+    fi
+  else
+    sri_mismatches=$((sri_mismatches + 1))
+    printf '       %s could not be fetched\n' "$asset_path" >&2
+  fi
+  rm -f "$asset_body"
+done < <(grep -oE '(src|href)="[^"]+"[^>]*integrity="sha384-[A-Za-z0-9+/=]+"' "$body_file" \
+  | sed -E 's/^(src|href)="([^"]+)".*integrity="([^"]+)".*$/\2 \3/')
+
+if (( sri_mismatches == 0 && sri_verified > 0 )); then
+  check "SRI: $sri_verified served asset(s) match their declared digest" ok
+elif (( sri_verified == 0 && sri_mismatches == 0 )); then
+  check "SRI: served assets match their declared digests" "no asset/integrity pairs parsed from the HTML"
+else
+  check "SRI: served assets match their declared digests" "$sri_mismatches mismatch(es), see above"
+fi
+
+# 6. Runtime config.json: present, valid JSON, and fully substituted. If a
+#    placeholder survives, the site loads but cannot reach the bucket.
+config_body=$(mktemp)
+if curl -fsSL -o "$config_body" "$url/pfb_for_s3/config.json" 2>/dev/null; then
+  if grep -q '###REPLACE_ME_' "$config_body"; then
+    check "config.json is fully substituted" "found an unsubstituted ###REPLACE_ME_* placeholder"
+  elif ! python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$config_body" 2>/dev/null; then
+    check "config.json is valid JSON" "could not be parsed"
+  else
+    missing=$(python3 - "$config_body" <<'PY'
+import json, sys
+required = ["siteName", "identityPoolId", "bucketName", "filesOpenInNewTab", "visibleStorageClasses"]
+config = json.load(open(sys.argv[1]))
+print(",".join(key for key in required if not config.get(key)))
+PY
+)
+    if [[ -n "$missing" ]]; then
+      check "config.json has all required keys" "missing or empty: $missing"
+    else
+      check "config.json is present, valid, and fully substituted" ok
+    fi
+  fi
+else
+  check "config.json is reachable" "could not fetch $url/pfb_for_s3/config.json"
+fi
+rm -f "$config_body"
 
 echo
 if (( fail == 0 )); then

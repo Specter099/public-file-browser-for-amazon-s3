@@ -1,4 +1,27 @@
-** aws-sdk-js; version 2.1560.0 -- https://aws.amazon.com/sdk-for-javascript/
+The Public File Browser for Amazon S3 frontend is distributed as a bundled
+JavaScript/CSS artifact (sam/seed_s3_data/website.zip) built from the npm
+dependencies declared in frontend/package.json. Exact resolved versions are
+recorded in frontend/package-lock.json.
+
+The third-party software below may be included in that bundled artifact.
+
+------
+
+** AWS SDK for JavaScript v3; see package-lock.json for exact versions -- https://github.com/aws/aws-sdk-js-v3
+   Includes: @aws-sdk/client-s3, @aws-sdk/core, @aws-sdk/checksums,
+   @aws-sdk/credential-provider-cognito-identity, @aws-sdk/credential-provider-env,
+   @aws-sdk/credential-provider-http, @aws-sdk/credential-provider-ini,
+   @aws-sdk/credential-provider-login, @aws-sdk/credential-provider-node,
+   @aws-sdk/credential-provider-process, @aws-sdk/credential-provider-sso,
+   @aws-sdk/credential-provider-web-identity, @aws-sdk/middleware-sdk-s3,
+   @aws-sdk/nested-clients, @aws-sdk/signature-v4-multi-region,
+   @aws-sdk/token-providers, @aws-sdk/types, @aws-sdk/xml-builder,
+   @aws/lambda-invoke-store
+** Smithy TypeScript; see package-lock.json for exact versions -- https://github.com/smithy-lang/smithy-typescript
+   Includes: @smithy/core, @smithy/credential-provider-imds,
+   @smithy/fetch-http-handler, @smithy/node-http-handler,
+   @smithy/signature-v4, @smithy/types
+ 
  
 
                                  Apache License
@@ -211,10 +234,20 @@
 
 ------
 
-** bootstrap-icons; version 1.11.3 -- https://icons.getbootstrap.com/
-Copyright (c) 2019-2024 The Bootstrap Authors
-** bootstrap; version 5.3.4 -- https://getbootstrap.com/
-Copyright (c) 2011-2023 The Bootstrap Authors
+** react; version 19.2.8 -- https://react.dev/
+Copyright (c) Meta Platforms, Inc. and affiliates.
+** react-dom; version 19.2.8 -- https://react.dev/
+Copyright (c) Meta Platforms, Inc. and affiliates.
+** scheduler; version 0.27.0 -- https://react.dev/
+Copyright (c) Meta Platforms, Inc. and affiliates.
+** bowser; version 2.14.1 -- https://github.com/lancedikson/bowser
+Copyright 2015, Dustin Diaz (the "Original Author")
+** @emnapi/core, @emnapi/runtime, @emnapi/wasi-threads -- https://github.com/toyobayashi/emnapi
+Copyright (c) 2022-present toyobayashi
+** @napi-rs/wasm-runtime -- https://github.com/napi-rs/napi-rs
+Copyright (c) 2018-present Long Yinan
+** @tybys/wasm-util -- https://github.com/toyobayashi/wasm-util
+Copyright (c) 2022-present toyobayashi
  
 The MIT License (MIT)
 
@@ -238,26 +271,18 @@ THE SOFTWARE.
 
 ------
 
-** jquery; version 3.7.1 -- https://jquery.com/
-Copyright OpenJS Foundation and other contributors, https://openjsf.org/
-** luxon; version 3.4.4 -- https://moment.github.io/luxon/
-Copyright 2019 JS Foundation and other contributors
+** tslib; version 2.8.1 -- https://github.com/Microsoft/tslib
+Copyright (c) Microsoft Corporation.
  
-Permission is hereby granted, free of charge, to any person obtaining
-a copy of this software and associated documentation files (the
-"Software"), to deal in the Software without restriction, including
-without limitation the rights to use, copy, modify, merge, publish,
-distribute, sublicense, and/or sell copies of the Software, and to
-permit persons to whom the Software is furnished to do so, subject to
-the following conditions:
+BSD Zero Clause License (0BSD)
 
-The above copyright notice and this permission notice shall be
-included in all copies or substantial portions of the Software.
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.

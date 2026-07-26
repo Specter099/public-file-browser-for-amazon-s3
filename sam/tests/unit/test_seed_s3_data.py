@@ -1,10 +1,37 @@
+import json
 import os
+import zipfile
 
 import boto3
 import pytest
 from moto import mock_s3  # type: ignore[attr-defined]
 
 from sam.seed_s3_data import app
+
+# The Lambda resolves website.zip by relative path, so the tests run from the
+# function's own directory.
+_LAMBDA_DIR = "seed_s3_data"
+_EXTRACTED = "/tmp/website/website"  # nosec hardcoded_tmp_directory
+
+
+def _chdir_to_lambda():
+    """Enter the Lambda directory, tolerating already being there.
+
+    These tests share a process and each one may run first, so the chdir has to
+    be idempotent rather than assuming the repo-relative starting directory.
+    """
+    if os.path.basename(os.getcwd()) != _LAMBDA_DIR:
+        os.chdir(_LAMBDA_DIR)
+
+
+def _read(relative_path: str) -> str:
+    with open(os.path.join(_EXTRACTED, relative_path), "r") as file:
+        return file.read()
+
+
+def _read_bytes(relative_path: str) -> bytes:
+    with open(os.path.join(_EXTRACTED, relative_path), "rb") as file:
+        return file.read()
 
 
 @pytest.fixture()
@@ -41,18 +68,85 @@ def test_seed_data(cloudformation_event):
         Bucket="test-bucket-files",
         CreateBucketConfiguration={"LocationConstraint": "us-west-2"},
     )
-    os.chdir("seed_s3_data")
+    _chdir_to_lambda()
     app.seed_data(cloudformation_event, None)
 
-    with open("/tmp/website/website/index.html", "r") as file:  # nosec hardcoded_tmp_directory
-        config_data = file.read()
-        assert "test-bucket-files" in config_data  # nosec assert_used
-        assert "TEST_SITE_NAME" in config_data  # nosec assert_used
-        assert "TEST_IDENTITY_POOL" in config_data  # nosec assert_used
-        assert "STANDARD,STANDARD_IA,ONEZONE_IA,REDUCED_REDUNDANCY" in config_data  # nosec assert_used
-        assert "files_open_in_new_tab: true" in config_data  # nosec assert_used
+    # Deploy-time settings live in config.json, which the frontend build ships
+    # verbatim; index.html is bundled output and is never rewritten here.
+    config = json.loads(_read("config.json"))
+    assert config["bucketName"] == "test-bucket-files"  # nosec assert_used
+    assert config["siteName"] == "TEST_SITE_NAME"  # nosec assert_used
+    assert config["identityPoolId"] == "TEST_IDENTITY_POOL"  # nosec assert_used
+    assert (  # nosec assert_used
+        config["visibleStorageClasses"]
+        == "STANDARD,STANDARD_IA,ONEZONE_IA,REDUCED_REDUNDANCY"
+    )
+    assert config["filesOpenInNewTab"] == "true"  # nosec assert_used
+
     response = s3.list_objects_v2(Bucket="test-bucket-static-website")
     assert response["KeyCount"] > 0  # nosec assert_used
+
+
+@mock_s3
+def test_seed_data_leaves_bundled_index_html_untouched(cloudformation_event):
+    # index.html carries Subresource Integrity hashes for the bundled JS/CSS.
+    # Substituting into it would invalidate those hashes and the browser would
+    # refuse to execute the bundle, so the seeding step must not modify it.
+    boto3.setup_default_session()
+    s3 = boto3.client("s3")
+    s3.create_bucket(
+        Bucket="test-bucket-static-website",
+        CreateBucketConfiguration={"LocationConstraint": "us-west-2"},
+    )
+    _chdir_to_lambda()
+
+    with zipfile.ZipFile("website.zip", "r") as archive:
+        original = archive.read("website/index.html")
+
+    app.seed_data(cloudformation_event, None)
+
+    assert _read_bytes("index.html") == original  # nosec assert_used
+
+
+@mock_s3
+def test_seed_data_sets_same_tab_mode(cloudformation_event):
+    boto3.setup_default_session()
+    s3 = boto3.client("s3")
+    s3.create_bucket(
+        Bucket="test-bucket-static-website",
+        CreateBucketConfiguration={"LocationConstraint": "us-west-2"},
+    )
+    cloudformation_event["ResourceProperties"]["FilesOpenMode"] = "In Same Tab"
+    _chdir_to_lambda()
+    app.seed_data(cloudformation_event, None)
+
+    assert json.loads(_read("config.json"))["filesOpenInNewTab"] == "false"  # nosec assert_used
+
+
+@mock_s3
+def test_seed_data_escapes_values_for_json(cloudformation_event):
+    # The SiteName AllowedPattern blocks quotes and backslashes at deploy time;
+    # this asserts the substitution is still safe if that pattern is loosened,
+    # because an unescaped quote would make config.json unparseable and take
+    # the whole site down.
+    boto3.setup_default_session()
+    s3 = boto3.client("s3")
+    s3.create_bucket(
+        Bucket="test-bucket-static-website",
+        CreateBucketConfiguration={"LocationConstraint": "us-west-2"},
+    )
+    hostile = 'Ac"me\\ Co", "injected": "yes'
+    cloudformation_event["ResourceProperties"]["SiteName"] = hostile
+    _chdir_to_lambda()
+    app.seed_data(cloudformation_event, None)
+
+    config = json.loads(_read("config.json"))
+    assert config["siteName"] == hostile  # nosec assert_used
+    assert "injected" not in config  # nosec assert_used
+
+    # site.webmanifest gets the same value and must stay valid JSON too.
+    manifest = json.loads(_read("icon/site.webmanifest"))
+    assert manifest["name"] == hostile  # nosec assert_used
 
 
 @mock_s3
@@ -77,9 +171,9 @@ def test_seed_data_with_existing_data(cloudformation_event):
 
 @mock_s3
 def test_seed_data_preserves_sitename_verbatim(cloudformation_event):
-    # Defense-in-depth: SiteName CFN parameter is restricted by AllowedPattern in template.yaml,
-    # but verify the Lambda substitutes the value verbatim into both the HTML and the JS string
-    # context so we can spot template-injection regressions if the AllowedPattern is ever loosened.
+    # The SiteName CFN parameter is restricted by AllowedPattern in
+    # template.yaml; this checks the Lambda passes a permitted value through
+    # unchanged and leaves no placeholder behind in either templated file.
     boto3.setup_default_session()
     s3 = boto3.client("s3")
     s3.create_bucket(
@@ -91,18 +185,17 @@ def test_seed_data_preserves_sitename_verbatim(cloudformation_event):
         CreateBucketConfiguration={"LocationConstraint": "us-west-2"},
     )
     cloudformation_event["ResourceProperties"]["SiteName"] = "Acme Co. (Internal)"
-    if os.path.basename(os.getcwd()) != "seed_s3_data":
-        os.chdir("seed_s3_data")
+    _chdir_to_lambda()
     app.seed_data(cloudformation_event, None)
-    with open("/tmp/website/website/index.html", "r") as f:  # nosec hardcoded_tmp_directory
-        html = f.read()
-    assert "Acme Co. (Internal)" in html  # nosec assert_used
-    # Placeholder must be fully substituted — none should remain.
-    assert "###REPLACE_ME_SITE_NAME###" not in html  # nosec assert_used
-    assert "###REPLACE_ME_IDENTITY_POOL_ID###" not in html  # nosec assert_used
-    assert "###REPLACE_ME_BUCKET_NAME###" not in html  # nosec assert_used
-    assert "###REPLACE_ME_FILES_OPEN_MODE###" not in html  # nosec assert_used
-    assert "###REPLACE_ME_VISIBLE_STORAGE_CLASSES###" not in html  # nosec assert_used
+
+    for file_name in ("config.json", "icon/site.webmanifest"):
+        contents = _read(file_name)
+        assert "###REPLACE_ME_" not in contents, file_name  # nosec assert_used
+
+    assert json.loads(_read("config.json"))["siteName"] == "Acme Co. (Internal)"  # nosec assert_used
+    assert (  # nosec assert_used
+        json.loads(_read("icon/site.webmanifest"))["name"] == "Acme Co. (Internal)"
+    )
 
 
 @mock_s3

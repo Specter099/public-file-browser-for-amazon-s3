@@ -29,37 +29,44 @@ def seed_data(event, _):
     with zipfile.ZipFile("website.zip", "r") as zip_ref:
         zip_ref.extractall("/tmp/website/")  # nosec hardcoded_tmp_directory
     path = "/tmp/website/website"  # nosec hardcoded_tmp_directory
-    # Replace placeholder config values with Lambda inputs
-    for file_name in ["index.html", "icon/site.webmanifest"]:
+    # Replace placeholder config values with Lambda inputs.
+    #
+    # config.json is a small hand-written file shipped verbatim by the frontend
+    # build (Vite copies public/ without touching it), specifically so these
+    # substitutions never have to run against bundled, minified, content-hashed
+    # output. Rewriting index.html here would also invalidate the Subresource
+    # Integrity hashes the build embeds for the JS/CSS bundles.
+    properties = event["ResourceProperties"]
+    # Both targets are JSON, and every placeholder sits inside a JSON string, so
+    # values are escaped for that context. The SiteName CFN parameter's
+    # AllowedPattern already excludes quotes and backslashes; this is
+    # defense-in-depth so a loosened pattern cannot produce an unparseable
+    # config.json (which would take the whole site down) or inject extra keys.
+    replacements = {
+        "###REPLACE_ME_SITE_NAME###": properties["SiteName"],
+        "###REPLACE_ME_IDENTITY_POOL_ID###": properties["IdentityPoolId"],
+        "###REPLACE_ME_BUCKET_NAME###": properties["FilesBucketName"],
+        # "In New Tab" / "In Same Tab" is constrained by AllowedValues; the
+        # frontend treats any value other than "false" as new-tab, so an
+        # unexpected value degrades to the documented recommended default.
+        "###REPLACE_ME_FILES_OPEN_MODE###": (
+            "false" if properties["FilesOpenMode"] == "In Same Tab" else "true"
+        ),
+        "###REPLACE_ME_VISIBLE_STORAGE_CLASSES###": properties["VisibleStorageClasses"],
+    }
+    for file_name in ["config.json", "icon/site.webmanifest"]:
         config_path = os.path.join(path, file_name)
         logger.debug(f"Modifying Website Config {config_path}...")
         with open(config_path, "r") as file:
             config_data = file.read()
-        config_data = config_data.replace(
-            "###REPLACE_ME_SITE_NAME###", event["ResourceProperties"]["SiteName"]
-        )
-        config_data = config_data.replace(
-            "###REPLACE_ME_IDENTITY_POOL_ID###",
-            event["ResourceProperties"]["IdentityPoolId"],
-        )
-        config_data = config_data.replace(
-            "###REPLACE_ME_BUCKET_NAME###",
-            event["ResourceProperties"]["FilesBucketName"],
-        )
-        if event["ResourceProperties"]["FilesOpenMode"] == "In New Tab":
-            config_data = config_data.replace(
-                "###REPLACE_ME_FILES_OPEN_MODE###", "true"
-            )
-        elif event["ResourceProperties"]["FilesOpenMode"] == "In Same Tab":
-            config_data = config_data.replace(
-                "###REPLACE_ME_FILES_OPEN_MODE###", "false"
-            )
-        config_data = config_data.replace(
-            "###REPLACE_ME_VISIBLE_STORAGE_CLASSES###",
-            event["ResourceProperties"]["VisibleStorageClasses"],
-        )
+        for placeholder, value in replacements.items():
+            # json.dumps escapes for a JSON string literal; strip its quotes
+            # because the placeholder is already inside quotes in the template.
+            config_data = config_data.replace(placeholder, json.dumps(str(value))[1:-1])
         with open(config_path, "w") as file:
             file.write(config_data)
+        # Fail the deploy loudly rather than serving a broken config.
+        json.loads(config_data)
     # Upload the website data
     logger.debug("Uploading Website Data...")
     for subdir, dirs, files in os.walk(path):
