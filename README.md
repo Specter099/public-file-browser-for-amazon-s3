@@ -86,6 +86,10 @@ For this walkthrough, you need to have the following prerequisites:
 
 This concludes the deployment of the Public File Browser for Amazon S3 web application. AWS SAM CLI uses [AWS CloudFormation](https://aws.amazon.com/cloudformation/) to orchestrate the deployment of the front-end static website and public file storage bucket. The entire application is deployed.
 
+#### Alternative: AWS CDK (Python)
+
+If you'd rather deploy with the [AWS CDK](https://aws.amazon.com/cdk/) instead of SAM, an equivalent Python CDK app that creates the same infrastructure is available under [`cdk/`](./cdk/README.md). Deploy one or the other, not both, against the same account/region.
+
 ### Usage
 
 To add files to the public interface simply move files into the S3 Bucket indicated in the `PublicFilesBucket` output from the above SAM Deploy command. The bucket name should start with `public-file-browser-files-` followed by a random string.
@@ -150,7 +154,7 @@ See [How can I configure CloudFront to serve my content using an alternate domai
 
 The public website files are located in the `public-file-browser-website-[...]` bucket. These files can be downloaded, modified, and re-uploaded containing customizations. Note that CloudFront caches these files, so you must create an invalidation to clear the cache when a file is updated. See [How do I remove a cached file from CloudFront](https://repost.aws/knowledge-center/cloudfront-clear-cache)?
 
-If you choose to update the files in the `./website/` directory of the source code repository for future deployments, then you must update the `./sam/seed_s3_data/website.zip` by following the instructions in the repository’s `README.md` file.
+If you choose to update the frontend source in the `./frontend/` directory of the source code repository for future deployments, then you must regenerate `./sam/seed_s3_data/website.zip` by running `npm run bundle` from `./frontend/`. See the [Development](#development) section below.
 
 
 ## Security
@@ -173,21 +177,42 @@ See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more inform
 
 ## Development
 
-Run the following from the website directory using [local-web-server](https://www.npmjs.com/package/local-web-server):
+The web interface lives in [`./frontend/`](./frontend/README.md) — a React +
+TypeScript single-page app built with Vite and styled with Tailwind CSS. It calls
+Amazon S3 directly from the browser using AWS SDK v3 and Cognito guest
+credentials; there is no server component.
 
 ```bash
-> ws -r '/ -> index.html' '/pfb_for_s3/(.*) -> /$1' --log.format dev
+cd frontend
+npm install
+npm run dev     # local dev server
+npm run test    # Vitest + React Testing Library
 ```
+
+See [`frontend/README.md`](./frontend/README.md) for how to point a local dev
+server at a deployed bucket, and for the details of the build's Subresource
+Integrity handling.
 
 ### Automatic Deployment Note
-The file `./sam/seed_s3_data/website.zip` contains a statically zipped copy of the `./website/` directory. This
-zip file is used to automatically load the `public-file-browser-website-[...]` bucket with the actual website code
-during deployment. Before re-deploying you will need to re-create `./sam/seed_s3_data/website.zip` using the command
-below from the root of the repository. You may then follow the [DEPLOYMENT](./docs/DEPLOYMENT.md) guide.
+The file `./sam/seed_s3_data/website.zip` contains the frontend's **built**
+output. This zip is used to automatically load the
+`public-file-browser-website-[...]` bucket with the website code during
+deployment. After changing anything under `./frontend/`, regenerate it and commit
+the result:
 
 ```bash
-> zip -FS -x "*.DS_Store" -r ./sam/seed_s3_data/website.zip website
+> cd frontend && npm run bundle
 ```
+
+That runs the production build, verifies the generated Subresource Integrity
+digests match the emitted assets, and rewrites
+`./sam/seed_s3_data/website.zip`. The seeding Lambda reads the zip rather than the
+source tree, so skipping this step silently deploys stale assets.
+
+Deploy-time settings (site name, bucket name, Cognito identity pool ID, display
+options) are substituted into `config.json` inside that bundle, which the app
+fetches at startup — not into `index.html`, whose Subresource Integrity digests
+must stay intact.
 
 ## License
 

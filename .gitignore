@@ -241,6 +241,23 @@ $RECYCLE.BIN/
 # End of https://www.gitignore.io/api/osx,linux,python,windows,pycharm,visualstudiocode
 .aws-sam/*
 samconfig.toml
+
+# AWS CDK
+cdk/cdk.out/
+cdk.context.json
+
+# Frontend build output (staged as build/website/, then zipped into
+# sam/seed_s3_data/website.zip, which IS committed)
+/build/
+frontend/node_modules/
+frontend/.vite/
+frontend/tsconfig.tsbuildinfo
+
+# The Python-oriented patterns above (build/, lib/, dist/) are broad enough to
+# swallow frontend source and config. Re-include what they would otherwise hide.
+!frontend/src/lib/
+!frontend/build*
+!frontend/dist/
 .idea/*
 ash_cf2cdk_output/*
 aggregated_results.txt

@@ -1,0 +1,40 @@
+/* Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved. */
+/* SPDX-License-Identifier: MIT-0 */
+@import "tailwindcss";
+
+/*
+ * Dark mode follows `prefers-color-scheme` by default and is overridden when the
+ * user picks a theme explicitly -- useTheme() puts `.dark` or `.light` on
+ * <html>. Relying on the media query for the default is what lets the correct
+ * theme paint before the bundle executes, with no inline bootstrap script for a
+ * future Content-Security-Policy to have to allowlist.
+ *
+ * The `:not(.light)` guards let an explicit light choice win over a system dark
+ * preference.
+ */
+@custom-variant dark {
+  @media (prefers-color-scheme: dark) {
+    &:where(:not(.light):not(.light *)) {
+      @slot;
+    }
+  }
+  &:where(.dark, .dark *) {
+    @slot;
+  }
+}
+
+@theme {
+  --color-brand: #ff9900;
+}
+
+@layer base {
+  html {
+    /* Keeps the layout from shifting when a listing gets long enough to scroll. */
+    scrollbar-gutter: stable;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+}

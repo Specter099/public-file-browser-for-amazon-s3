@@ -1,0 +1,7 @@
+{
+  "siteName": "###REPLACE_ME_SITE_NAME###",
+  "identityPoolId": "###REPLACE_ME_IDENTITY_POOL_ID###",
+  "bucketName": "###REPLACE_ME_BUCKET_NAME###",
+  "filesOpenInNewTab": "###REPLACE_ME_FILES_OPEN_MODE###",
+  "visibleStorageClasses": "###REPLACE_ME_VISIBLE_STORAGE_CLASSES###"
+}
