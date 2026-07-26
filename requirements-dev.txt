@@ -1,0 +1,22 @@
+# Dev/test dependencies for the Python side of this repo (the seeding Lambda and
+# its tests). Installed by both scripts/local-ci.sh and the python-ci job in
+# .github/workflows/ci.yml, so a local run and a CI run use the same tools.
+#
+# The CDK app has its own pinned set in cdk/requirements.txt and
+# cdk/requirements-dev.txt, installed separately by the static-site-review
+# workflow.
+
+# Pinned exactly, not >=: ruff changes its default rule set between minor
+# releases, so an unpinned linter means local and CI enforce different rules.
+# Bump deliberately, with ruff.toml reviewed alongside. Matches the pin in
+# Specter099/.github so org-wide findings stay consistent.
+ruff==0.16.0
+
+pytest>=8.0
+
+# Needed to import and exercise sam/seed_s3_data/app.py in the Lambda tests.
+boto3>=1.34
+moto[s3]>=4.2,<5.0
+crhelper>=2.0.11
+loguru>=0.7.2
+simplejson>=3.19.2

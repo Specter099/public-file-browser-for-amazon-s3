@@ -1,6 +1,7 @@
 import json
 import os
 import zipfile
+from pathlib import Path
 
 import boto3
 import pytest
@@ -8,9 +9,11 @@ from moto import mock_s3  # type: ignore[attr-defined]
 
 from sam.seed_s3_data import app
 
-# The Lambda resolves website.zip by relative path, so the tests run from the
-# function's own directory.
-_LAMBDA_DIR = "seed_s3_data"
+# The Lambda resolves website.zip by a relative path, so these tests have to run
+# from the function's own directory. That directory is resolved from __file__
+# rather than the current working directory: CI invokes `pytest sam/tests/` from
+# the repository root, and anything cwd-relative only passes when run from sam/.
+_LAMBDA_DIR = Path(__file__).resolve().parents[2] / "seed_s3_data"
 _EXTRACTED = "/tmp/website/website"  # nosec hardcoded_tmp_directory
 
 
@@ -18,9 +21,9 @@ def _chdir_to_lambda():
     """Enter the Lambda directory, tolerating already being there.
 
     These tests share a process and each one may run first, so the chdir has to
-    be idempotent rather than assuming the repo-relative starting directory.
+    be idempotent rather than assuming any particular starting directory.
     """
-    if os.path.basename(os.getcwd()) != _LAMBDA_DIR:
+    if Path.cwd() != _LAMBDA_DIR:
         os.chdir(_LAMBDA_DIR)
 
 

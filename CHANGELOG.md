@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- GitHub Actions CI and CD (`.github/workflows/ci.yml`, `.github/workflows/cd.yml`)
+  built on the org's shared reusable workflows in `Specter099/.github`. CI runs on
+  pull requests only; CD runs on push to `main` and does not re-run the CI suite.
+- `scripts/local-ci.sh` — the pre-PR gate. Each required stage mirrors a CI step,
+  and `scripts/check_ci_parity.py` fails the build if the two drift apart.
+- `scripts/check-bundle-freshness.sh` — fails CI when the committed
+  `sam/seed_s3_data/website.zip` no longer matches a fresh build of `frontend/`,
+  which would otherwise deploy stale assets silently.
+- ESLint (flat config, type-aware `typescript-eslint` rules) and `npm run lint`
+  for the frontend; `ruff` check/format for Python, configured in `ruff.toml`.
+- `.gitleaks.toml` allowlisting the vendored AWS SDK v2 bundle that was removed
+  in the React rebuild but still trips the generic-api-key heuristic in git
+  history. Scoped to that one path.
 - AWS CDK (Python) deployment option under `cdk/`, equivalent to the existing SAM
   template. Either may be used; they are independent stacks.
 - Frontend: grid/thumbnail view, filename filtering within a folder, sortable
@@ -29,6 +42,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   prefix and resolved against the files bucket.
 - Rebuilding the deployed bundle is now `cd frontend && npm run bundle` rather
   than a manual `zip` invocation.
+- The seeding Lambda's tests no longer depend on the working directory or on
+  `PYTHONPATH`; `python3 -m pytest sam/tests/` works from anywhere.
+- Pinned TypeScript to 5.x. `typescript-eslint` has no release supporting
+  TypeScript 7, and without its parser ESLint cannot read `.tsx` at all.
 
 ### Removed
 - The `website/` directory and its committed vendor libraries, superseded by

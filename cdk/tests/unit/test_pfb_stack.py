@@ -19,7 +19,9 @@ _BASIC_EXECUTION_ROLE_SUFFIX = "service-role/AWSLambdaBasicExecutionRole"
 # @aws-cdk/aws-lambda:useCdkManagedLogGroup decides whether a log group is
 # emitted at all. Load the real context so the tests assert against the same
 # template `cdk deploy` would push.
-_CDK_JSON = json.loads((Path(__file__).resolve().parent.parent.parent / "cdk.json").read_text())
+_CDK_JSON = json.loads(
+    (Path(__file__).resolve().parent.parent.parent / "cdk.json").read_text()
+)
 
 
 def _bucket_name_prefix(bucket_resource: dict) -> str:
@@ -217,9 +219,15 @@ def test_website_and_files_buckets_grant_cloudfront_read_via_oac(template: Templ
     )
     matches = template.find_resources(
         "AWS::S3::BucketPolicy",
-        {"Properties": {"PolicyDocument": {"Statement": Match.array_with([statement])}}},
+        {
+            "Properties": {
+                "PolicyDocument": {"Statement": Match.array_with([statement])}
+            }
+        },
     )
-    assert len(matches) == 2, "expected both origin buckets to grant CloudFront OAC read access"
+    assert len(matches) == 2, (
+        "expected both origin buckets to grant CloudFront OAC read access"
+    )
 
 
 # ----------------------------------------------------------------------
@@ -514,7 +522,9 @@ def test_unauthenticated_role_can_only_list_files_bucket(template: Template):
             }
         ]
     ]
-    assert len(unauth_policies) == 1, "expected exactly one files-bucket ListBucket policy"
+    assert len(unauth_policies) == 1, (
+        "expected exactly one files-bucket ListBucket policy"
+    )
 
 
 # ----------------------------------------------------------------------

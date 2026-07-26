@@ -74,7 +74,7 @@ describe("loadConfig", () => {
   it("fetches and parses the runtime config", async () => {
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify(VALID), { status: 200 }));
 
-    const config = await loadConfig(fetchImpl as unknown as typeof fetch);
+    const config = await loadConfig(fetchImpl);
 
     expect(fetchImpl).toHaveBeenCalledWith(CONFIG_URL, { cache: "no-cache" });
     expect(config.siteName).toBe("AnyCompany Public Files");
@@ -83,6 +83,6 @@ describe("loadConfig", () => {
   it("throws a useful message when config.json is missing", async () => {
     const fetchImpl = vi.fn(async () => new Response("nope", { status: 404 }));
 
-    await expect(loadConfig(fetchImpl as unknown as typeof fetch)).rejects.toThrow(/404/);
+    await expect(loadConfig(fetchImpl)).rejects.toThrow(/404/);
   });
 });

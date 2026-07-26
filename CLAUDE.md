@@ -93,9 +93,11 @@ Deployment is intentionally a **two-pass** process: deploy once with `CrossOrigi
 ### Running Tests
 
 ```bash
-# From the sam/ directory. PYTHONPATH=.. is REQUIRED — the tests import `sam.seed_s3_data.app`,
-# so the repo root must be on sys.path.
-cd sam && PYTHONPATH=.. python -m pytest tests/unit/test_seed_s3_data.py -v
+# From the repo root. `sam/tests/conftest.py` puts the repo root on sys.path and
+# the suite anchors its chdir to __file__, so it runs from any directory and
+# needs no PYTHONPATH. Use `python3 -m pytest`, not a bare `pytest`: the shim on
+# PATH can resolve to a different interpreter than the one holding boto3.
+python3 -m pytest sam/tests/ -v
 ```
 
 Tests use `moto` to mock AWS S3 and verify the Lambda custom resource (7 tests):
@@ -107,7 +109,9 @@ Tests use `moto` to mock AWS S3 and verify the Lambda custom resource (7 tests):
 - `test_seed_data_preserves_sitename_verbatim` — permitted SiteName passes through and no `###REPLACE_ME_*###` markers leak through
 - `test_delete_data_with_existing_data` — cleanup on stack deletion
 
-The tests chdir into `seed_s3_data` (so the Lambda can find `website.zip` by relative path) and write to `/tmp/website/`. They must be run from `sam/`. The chdir helper is idempotent, so unlike before they are **not** order-dependent — a single test by node id works.
+The tests chdir into `seed_s3_data` (so the Lambda can find `website.zip` by relative path) and write to `/tmp/website/`. The chdir target is resolved from `__file__` and the helper is idempotent, so they are neither cwd-dependent nor order-dependent — a single test by node id works, from any directory.
+
+**Don't run `pytest sam/tests/ cdk/tests/` in one invocation.** Both have a `tests/unit/` package, so pytest computes the same module name for both and the second one fails to import. CI runs them in separate jobs and `scripts/local-ci.sh` runs them as separate stages, which is why this never surfaces there.
 
 Because they read `website.zip`, these tests exercise the **committed built frontend**. If you change `frontend/` without re-running `npm run bundle`, they test stale assets.
 
@@ -119,10 +123,56 @@ cd frontend && npm run test    # 81 tests across 5 files
 
 Covers `lib/` units (config parsing, S3 listing/pagination/storage-class filtering, sort/filter semantics, formatting) and `App.tsx` integration against a fake S3 client — navigation, breadcrumbs, filtering, sorting, view toggle, pagination, theme, and a security group asserting XSS payloads render inert and `target="_blank"` always carries `rel="noopener noreferrer"`.
 
+### CI/CD
+
+```bash
+# THE PRE-PR GATE. Every required stage mirrors a step .github/workflows/ci.yml
+# runs, so green here means green there. Run it before opening a PR.
+./scripts/local-ci.sh
+
+./scripts/local-ci.sh --list-stages   # each stage and the ci.yml job covering it
+./scripts/local-ci.sh --fix           # eslint --fix + ruff format first
+./scripts/local-ci.sh --fast          # skip slow stages — NOT before a PR
+./scripts/local-ci.sh --install-hook  # install as a git pre-push hook
+```
+
+Workflows call the org's shared reusable workflows from `Specter099/.github`:
+
+| Workflow | Trigger | Jobs |
+|---|---|---|
+| `.github/workflows/ci.yml` | `pull_request: [main]` | `review` (static-site-review: eslint, vitest, build, cdk pytest, pip-audit, synth, diff-as-PR-comment), `python` (python-ci: ruff, gitleaks, bandit, Lambda tests), `bundle` (repo-specific invariants) |
+| `.github/workflows/cd.yml` | `push: [main]` + `workflow_dispatch` | `deploy` (static-site-deploy: npm build then `cdk deploy`) |
+
+Conventions this follows, from the org's `CLAUDE.md` and the 2026-07-26 CI/CD
+consistency spec:
+
+- **CI is PR-only; CD is push-to-main only.** A workflow must never trigger on
+  both — that double-runs every check at merge (invariant WF014). The merge gate
+  is branch protection, so CD deliberately does not re-run lint/tests (WF013).
+- `paths-ignore` lives in the caller, because a `workflow_call` target cannot
+  filter paths.
+- `enable-ci-logs: false` on both callers — this repo has no `CI_LOGS_BUCKET` /
+  `CI_LOGS_LOG_GROUP` configured, so log shipping would be pure overhead.
+- `concurrency` on the CI workflow so superseded PR pushes cancel.
+
+Two things to know before changing any of this:
+
+- **`scripts/check_ci_parity.py` fails the build if `ci.yml` gains or loses a job
+  without `local-ci.sh --list-stages` following.** It compares job names only. It
+  *cannot* see a step changing inside one of the shared reusable workflows, which
+  this repo references at `@main` — so when those change upstream, re-check the
+  local gate's stage list by hand.
+- The shared workflows are referenced `@main`, not pinned to a SHA. That trips
+  invariant **WF004** (warn-level), but it matches the org README's own usage
+  examples and the spec's caller-migration instructions, and it is what lets
+  shared fixes land without a PR here. Pin only if the org changes that
+  convention.
+
 ### Other checks used in review
 
 ```bash
-cd frontend && npm run typecheck   # tsc; no ESLint is configured
+cd frontend && npm run lint        # ESLint (flat config, type-aware)
+cd frontend && npm run typecheck   # tsc
 cd frontend && npm run verify:sri  # built SRI digests match emitted assets
 cfn-lint sam/template.yaml         # template lint; some pre-existing warnings are expected
 ```
@@ -205,8 +255,9 @@ The rebuild removed the main obstacle to a CSP: there is no longer an inline `<s
 
 ## Code Conventions
 
-- **No linter or formatter configured** — there are no ESLint, Prettier, or Python linting configs. TypeScript runs in strict mode (plus `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`), so `npm run typecheck` is the closest thing to a lint gate. Match surrounding style: 2-space indent and double quotes in TS/TSX, 4-space in Python.
-- **No CI/CD pipeline** — build, test, and deployment are manual.
+- **Linting is enforced in CI.** TypeScript/React: ESLint flat config (`frontend/eslint.config.js`) with `typescript-eslint`'s type-aware rules. Python: `ruff` (check + format), configured in `ruff.toml`. Both are pinned — `ruff` exactly in `requirements-dev.txt`, because ruff changes its default rule set between minor releases and an unpinned linter means local and CI enforce different rules. TypeScript also runs strict, with `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`. Match surrounding style: 2-space indent and double quotes in TS/TSX, 4-space in Python.
+- **`frontend` pins TypeScript to 5.x deliberately.** `typescript-eslint` has no release supporting TypeScript 7 (peer range caps below 6.1), so TS 7 would mean no ESLint at all — the parser cannot read `.tsx` without it. Revisit when `typescript-eslint` ships TS 7 support.
+- **CI/CD runs on GitHub Actions** via the org's shared reusable workflows; see the CI/CD section above. `scripts/local-ci.sh` is the pre-PR gate and is meant to stay in lockstep with `ci.yml`.
 - **Security annotations** — Python files use `# nosec` comments for bandit suppression (`hardcoded_tmp_directory`, `assert_used`). Keep them when moving that code.
 - **Infrastructure suppressions** — `template.yaml` resources carry `cfn_nag` / `cdk_nag` / `checkov` suppression metadata with written justifications. Preserve the reasons if you touch those resources.
 - **Frontend dependencies come from npm** — `frontend/node_modules/` is gitignored and `package-lock.json` is committed. The pre-rebuild practice of committing vendored minified libraries is gone.
@@ -229,11 +280,16 @@ The rebuild removed the main obstacle to a CSP: there is no longer an inline `<s
 | Tests — frontend | `frontend/src/**/*.test.ts(x)` |
 | Tests — SAM Lambda | `sam/tests/unit/test_seed_s3_data.py` |
 | Tests — CDK stack | `cdk/tests/unit/test_pfb_stack.py` |
+| CI / CD pipelines | `.github/workflows/ci.yml`, `.github/workflows/cd.yml` |
+| The pre-PR gate | `scripts/local-ci.sh` (+ `scripts/check_ci_parity.py`) |
+| Deployed-artifact drift guard | `scripts/check-bundle-freshness.sh` |
+| Lint config | `frontend/eslint.config.js`, `ruff.toml` |
 | Post-deploy verification | `sam/verify.sh` (works against either deployment) |
 
 ## Important Notes
 
-- **After modifying anything under `frontend/`, run `npm run bundle` from `frontend/` and commit the regenerated `sam/seed_s3_data/website.zip`.** The Lambda reads the zip, not the source tree, so an un-rebuilt zip silently deploys stale assets — and the SAM pytest suite will be testing stale assets too. `npm run bundle` builds, verifies SRI digests, and rewrites the zip in one step.
+- **After modifying anything under `frontend/`, run `npm run bundle` from `frontend/` and commit the regenerated `sam/seed_s3_data/website.zip`.** The Lambda reads the zip, not the source tree, so an un-rebuilt zip silently deploys stale assets — and the SAM pytest suite will be testing stale assets too. `npm run bundle` builds, verifies SRI digests, and rewrites the zip in one step. CI enforces this: the `bundle` job runs `scripts/check-bundle-freshness.sh`, which rebuilds and compares the archive entry-by-entry (content, not a checksum of the zip file — zip embeds timestamps, so identical inputs still differ byte-for-byte).
+- **The CD workflow does not rebuild the zip.** It runs `npm run build` and then `cdk deploy`, and the CDK asset bundles the *committed* `website.zip`. The freshness check in CI is what makes that safe.
 - The seeding Lambda is **create-only and non-destructive**: if the website bucket already has any object it returns early. Stack *updates* are a no-op (`@helper.update`). To push new website assets to an existing stack, upload to the `public-file-browser-website-*` bucket yourself and create a CloudFront invalidation.
 - The `samconfig.toml` file (SAM deployment config) and `.aws-sam/` are gitignored.
 - S3 buckets have encryption, versioning, and a 90-day noncurrent-version expiry configured in the SAM template. The logging bucket has `DeletionPolicy: Retain`.

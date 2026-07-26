@@ -46,8 +46,12 @@ export function parseConfig(raw: RawSiteConfig): SiteConfig {
     identityPoolId,
     bucketName: requireString(raw.bucketName, "bucketName"),
     // Anything other than an explicit "false" keeps the recommended default of
-    // opening files in a new tab.
-    filesOpenInNewTab: String(raw.filesOpenInNewTab ?? "true").toLowerCase() !== "false",
+    // opening files in a new tab. Checked as a string rather than coerced with
+    // String(): the field is `unknown`, and coercing an object would silently
+    // yield "[object Object]" and read as "not false".
+    filesOpenInNewTab:
+      typeof raw.filesOpenInNewTab !== "string" ||
+      raw.filesOpenInNewTab.toLowerCase() !== "false",
     visibleStorageClasses: requireString(raw.visibleStorageClasses, "visibleStorageClasses")
       .toUpperCase()
       .split(",")

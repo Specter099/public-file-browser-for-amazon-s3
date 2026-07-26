@@ -1,0 +1,31 @@
+# Mirrors the ruff configuration in Specter099/.github so this repo enforces the
+# same rules as the org's shared python-ci workflow.
+#
+# Without this file, `ruff check` enforces whatever the installed version happens
+# to default to, and that default changes between releases — which is how a green
+# local run becomes a red CI run on code nobody touched. Pinning the version in
+# requirements-dev.txt fixes the immediate divergence; declaring the rule set
+# here is what stops the next bump from moving the goalposts.
+#
+# This is ruff's documented *stable default* selection. Broadening it (I, UP,
+# RUF, SIM are all reasonable next steps) means fixing the findings that appear,
+# so it belongs in its own change rather than riding along with a tooling PR.
+
+# The Lambda runtime is python3.13 (see sam/template.yaml and the CDK stack); the
+# org default is py312, so this is set explicitly rather than inherited.
+target-version = "py313"
+
+exclude = [
+    "cdk.out",
+    "build",
+    "node_modules",
+    ".venv",
+]
+
+[lint]
+select = ["E4", "E7", "E9", "F"]
+
+[format]
+# Match the default explicitly rather than inheriting it.
+quote-style = "double"
+indent-style = "space"

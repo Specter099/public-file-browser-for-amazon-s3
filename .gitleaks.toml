@@ -1,0 +1,26 @@
+# gitleaks configuration.
+#
+# Picked up automatically by both the local gate (scripts/local-ci.sh) and the
+# gitleaks step in the shared python-ci workflow, which scans full git history
+# (fetch-depth: 0) — so an allowlist entry is needed for historical blobs even
+# when the file no longer exists in the working tree.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = """
+Vendored, minified third-party libraries that were removed from the working tree
+in the React rebuild but remain in git history.
+
+The AWS SDK for JavaScript v2 bundle trips the generic-api-key heuristic five
+times on strings like `authtype:"..."` and `result_key:"..."`, which are the
+SDK's own API-model metadata, not credentials. The file was published by AWS and
+its contents are identical to the public npm artifact.
+
+Scoped to this path only. Real secrets committed anywhere else — including
+elsewhere under website/ — are still reported.
+"""
+paths = [
+    '''^website/js/aws-sdk-js-v2\.1560\.0\.min\.js$''',
+]

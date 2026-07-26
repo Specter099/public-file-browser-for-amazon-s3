@@ -187,7 +187,24 @@ cd frontend
 npm install
 npm run dev     # local dev server
 npm run test    # Vitest + React Testing Library
+npm run lint    # ESLint
 ```
+
+### Before opening a pull request
+
+Run the local CI gate from the repository root:
+
+```bash
+> ./scripts/local-ci.sh
+```
+
+Every required stage mirrors a step that `.github/workflows/ci.yml` runs, so a
+green run here means a green run in CI. Use `--list-stages` to see each stage and
+the CI job it corresponds to, `--fix` to auto-format first, and `--install-hook`
+to wire it up as a git pre-push hook.
+
+The gate reports `INCOMPLETE` rather than `PASS` when a required tool is missing,
+because "I did not check" is not "it is fine" — CI will still run that stage.
 
 See [`frontend/README.md`](./frontend/README.md) for how to point a local dev
 server at a deployed bucket, and for the details of the build's Subresource
