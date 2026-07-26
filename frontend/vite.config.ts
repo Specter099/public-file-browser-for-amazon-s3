@@ -107,6 +107,17 @@ export default defineConfig({
     // Vite adds `crossorigin` to emitted tags; SRI needs the fetch to be
     // same-origin or CORS-enabled, and the assets are same-origin here.
     sourcemap: false,
+    rollupOptions: {
+      output: {
+        // HTML-attribute SRI cannot cover a dynamically imported chunk: it is
+        // fetched by the runtime, not by a tag in index.html. The AWS SDK
+        // lazily `import()`s its Cognito identity client, which would leave
+        // that chunk with no integrity check at all -- a silent hole in the
+        // coverage this build otherwise claims. Emitting a single chunk keeps
+        // every byte of JS behind an integrity attribute.
+        inlineDynamicImports: true,
+      },
+    },
   },
   test: {
     environment: "jsdom",

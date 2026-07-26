@@ -10,7 +10,7 @@
 // it, a wrong hash is invisible until a browser refuses to execute the bundle
 // and the page renders blank.
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
@@ -74,6 +74,29 @@ for (const tag of tags) {
     failures.push(`${fileName} integrity mismatch\n    declared: ${declared}\n    actual:   ${actual}`);
   } else {
     checked.push(fileName);
+  }
+}
+
+// Every emitted asset must be reachable from a tag carrying integrity. A chunk
+// that is only ever loaded by a runtime `import()` would otherwise sit on disk
+// with no integrity check anywhere -- invisible to a check that walks the HTML,
+// and a silent hole in the coverage this build claims. See
+// build.rollupOptions.output.inlineDynamicImports in vite.config.ts.
+let emitted = [];
+try {
+  emitted = readdirSync(path.join(outDir, "assets"));
+} catch {
+  failures.push(`no assets/ directory in ${outDir} -- is the build empty?`);
+}
+
+const verifiedNames = new Set(checked.map((fileName) => path.basename(fileName)));
+for (const name of emitted) {
+  if (!/\.(js|css)$/.test(name)) continue;
+  if (!verifiedNames.has(name)) {
+    failures.push(
+      `assets/${name} is emitted but never referenced with integrity from index.html ` +
+        `(a dynamically imported chunk cannot be covered by HTML-attribute SRI)`,
+    );
   }
 }
 

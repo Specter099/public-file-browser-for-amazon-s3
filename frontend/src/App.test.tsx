@@ -403,6 +403,48 @@ describe("pagination", () => {
     expect(screen.queryByRole("button", { name: /next page/i })).not.toBeInTheDocument();
   });
 
+  it("keeps lexicographic ordering on the final, un-truncated page", async () => {
+    // The last page of a multi-page listing is not truncated, but regrouping
+    // folders above files there would visibly flip ordering mode mid-listing.
+    window.history.pushState(null, "", "/?s=m.txt");
+    const { client } = clientFor({
+      "": { folders: ["zzz-folder/"], files: [object("nnn.txt")], truncated: false },
+    });
+
+    renderApp(client);
+    await screen.findByRole("link", { name: /nnn\.txt/i });
+
+    const order = screen
+      .getAllByRole("row")
+      .slice(1)
+      .map((row) => row.querySelector("a")?.textContent ?? "");
+    expect(order).toEqual(["nnn.txt", "zzz-folder/"]);
+  });
+
+  it("offers a next page even when every object on the page is hidden", async () => {
+    // Regression: deriving the cursor from visible entries stranded everything
+    // past a page whose objects were all filtered out by storage class.
+    const send = vi.fn(async (command: { input: Record<string, unknown> }) => {
+      const startAfter = command.input.StartAfter as string | undefined;
+      return startAfter === undefined
+        ? {
+            Prefix: "",
+            Contents: [{ ...object("cold.txt"), StorageClass: "GLACIER" }],
+            IsTruncated: true,
+          }
+        : { Prefix: "", Contents: [object("warm.txt")], IsTruncated: false };
+    });
+
+    const user = userEvent.setup();
+    renderApp({ send } as unknown as S3Client);
+
+    const next = await screen.findByRole("button", { name: /next page/i });
+    await user.click(next);
+
+    expect(await screen.findByRole("link", { name: /warm\.txt/i })).toBeInTheDocument();
+    expect(window.location.search).toBe("?s=cold.txt");
+  });
+
   it("advances to the next page using the last key as the cursor", async () => {
     const user = userEvent.setup();
     const send = vi.fn(async (command: { input: Record<string, unknown> }) => {

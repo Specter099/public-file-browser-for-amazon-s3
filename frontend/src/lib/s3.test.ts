@@ -143,13 +143,57 @@ describe("listPrefix", () => {
     expect(listing.nextStartAfter).toBe("b.txt");
   });
 
-  it("reports no cursor when a truncated response yields no visible entries", async () => {
-    // Every object filtered out by storage class; advancing with an undefined
-    // cursor would restart the listing from the beginning.
+  it("still reports a cursor when every object on a truncated page is hidden", async () => {
+    // Storage-class filtering happens after the API call. Deriving the cursor
+    // from the visible entries would yield null here and silently strand every
+    // object past this page.
     const { client } = fakeClient({
       Prefix: "",
       Contents: [{ Key: "cold.txt", Size: 1, LastModified: new Date(), StorageClass: "GLACIER" }],
       IsTruncated: true,
+    });
+
+    const listing = await listPrefix(client, CONFIG, { prefix: "" });
+
+    expect(listing.entries).toEqual([]);
+    expect(listing.nextStartAfter).toBe("cold.txt");
+  });
+
+  it("resumes past the common prefixes when they sort after the last object", async () => {
+    // Entries are ordered folders-first for display, so the last *visible*
+    // entry is a file even though the folders sort higher. Resuming from the
+    // file would re-list every one of those folders on the next page.
+    const { client } = fakeClient({
+      Prefix: "",
+      CommonPrefixes: [{ Prefix: "z9/" }],
+      Contents: [{ Key: "y.txt", Size: 1, LastModified: new Date(), StorageClass: "STANDARD" }],
+      IsTruncated: true,
+    });
+
+    const listing = await listPrefix(client, CONFIG, { prefix: "" });
+
+    expect(listing.entries.map((entry) => entry.key)).toEqual(["z9/", "y.txt"]);
+    expect(listing.nextStartAfter).toBe("z9/");
+  });
+
+  it("resumes from the last object when it sorts after the common prefixes", async () => {
+    const { client } = fakeClient({
+      Prefix: "",
+      CommonPrefixes: [{ Prefix: "a-folder/" }],
+      Contents: [{ Key: "z.txt", Size: 1, LastModified: new Date(), StorageClass: "STANDARD" }],
+      IsTruncated: true,
+    });
+
+    const listing = await listPrefix(client, CONFIG, { prefix: "" });
+
+    expect(listing.nextStartAfter).toBe("z.txt");
+  });
+
+  it("reports no cursor on a complete page", async () => {
+    const { client } = fakeClient({
+      Prefix: "",
+      Contents: [{ Key: "a.txt", Size: 1, LastModified: new Date(), StorageClass: "STANDARD" }],
+      IsTruncated: false,
     });
 
     const listing = await listPrefix(client, CONFIG, { prefix: "" });
@@ -208,5 +252,23 @@ describe("objectUrl", () => {
   it("encodes characters that would otherwise break out of the URL path", () => {
     expect(objectUrl('weird"name#1.txt')).toBe("/weird%22name%231.txt");
     expect(objectUrl("a?b.txt")).toBe("/a%3Fb.txt");
+    expect(objectUrl("back\\slash.txt")).toBe("/back%5Cslash.txt");
+    expect(objectUrl("new\nline.txt")).toBe("/new%0Aline.txt");
+  });
+
+  it("does not emit a protocol-relative URL for a key with a leading slash", () => {
+    // S3 permits a leading slash in a key; "//evil.com/x" would navigate
+    // off-origin entirely.
+    expect(objectUrl("/evil.com/x.txt")).toBe("/evil.com/x.txt");
+    expect(objectUrl("//evil.com/x.txt")).toBe("/evil.com/x.txt");
+  });
+
+  it("encodes dot segments so URL normalization cannot collapse them", () => {
+    expect(objectUrl("a/../b.txt")).toBe("/a/%2E%2E/b.txt");
+    expect(objectUrl("a/./b.txt")).toBe("/a/%2E/b.txt");
+  });
+
+  it("keeps interior empty segments distinct", () => {
+    expect(objectUrl("a//b.txt")).toBe("/a//b.txt");
   });
 });

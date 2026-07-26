@@ -81,11 +81,13 @@ export function App({ config, client }: AppProps) {
   }, []);
 
   const allEntries = listing?.entries ?? [];
-  const isTruncated = listing?.isTruncated ?? false;
+  // Any page reached via `?s=` is part of a multi-page listing, even the final
+  // un-truncated one, so ordering mode must not flip on the last page.
+  const isPaginated = (listing?.isTruncated ?? false) || startAfter !== "";
 
   const visibleEntries = useMemo(
-    () => sortEntries(filterEntries(allEntries, query), sort, isTruncated),
-    [allEntries, query, sort, isTruncated],
+    () => sortEntries(filterEntries(allEntries, query), sort, isPaginated),
+    [allEntries, query, sort, isPaginated],
   );
 
   // Only offer ".." below the bucket root.

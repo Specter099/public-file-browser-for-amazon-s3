@@ -107,13 +107,38 @@ export async function listPrefix(
   }
 
   const isTruncated = response.IsTruncated === true;
-  const lastEntry = entries.at(-1);
 
   return {
     entries,
     isTruncated,
-    nextStartAfter: isTruncated && lastEntry ? lastEntry.key : null,
+    nextStartAfter: isTruncated ? resumeKey(response) : null,
   };
+}
+
+/**
+ * The key to resume from on the next page.
+ *
+ * Derived from the raw response, deliberately **not** from the rendered
+ * entries. Storage-class filtering and the folders-first display order both
+ * happen after the API call, so using the last visible entry breaks two ways:
+ * a page whose objects are all hidden yields no cursor at all and silently
+ * strands everything past it, and a page whose common prefixes sort after its
+ * last file resumes too early and re-lists folders the user already saw.
+ *
+ * S3 truncates over the merged key space and returns each list in order, so the
+ * resume point is whichever list ends higher.
+ */
+function resumeKey(response: {
+  Contents?: Array<{ Key?: string | undefined }> | undefined;
+  CommonPrefixes?: Array<{ Prefix?: string | undefined }> | undefined;
+}): string | null {
+  const candidates = [
+    response.Contents?.at(-1)?.Key,
+    response.CommonPrefixes?.at(-1)?.Prefix,
+  ].filter((key): key is string => typeof key === "string" && key.length > 0);
+
+  if (candidates.length === 0) return null;
+  return candidates.reduce((highest, key) => (key > highest ? key : highest));
 }
 
 /** Parent prefix of `prefix`, or "" when already at the bucket root. */
@@ -136,7 +161,37 @@ export function breadcrumbSegments(prefix: string): Array<{ name: string; prefix
   return segments;
 }
 
-/** Public CloudFront path for an object key (served from the files origin). */
+/**
+ * Public CloudFront path for an object key (served from the files origin).
+ *
+ * Each segment is percent-encoded so quotes, `#`, `?`, backslashes, and
+ * newlines in a key cannot break out of the URL. Two S3-legal key shapes get
+ * special handling because the browser would otherwise resolve them somewhere
+ * other than this object:
+ *   - a leading `/` produces `//host/...`, a protocol-relative URL pointing at
+ *     another origin entirely;
+ *   - `.` and `..` segments are collapsed during URL normalization.
+ */
 export function objectUrl(key: string): string {
-  return `/${key.split("/").map(encodeURIComponent).join("/")}`;
+  const segments = key.split("/");
+
+  // Drop the whole leading run of empty segments: one leading slash gives
+  // `//host/...` and two gives `///...`, both of which the browser resolves
+  // somewhere other than this object. Interior empties are preserved so
+  // `a//b` stays a distinct key.
+  let start = 0;
+  while (start < segments.length && segments[start] === "") start += 1;
+
+  const path = segments
+    .slice(start)
+    .map((segment) =>
+      segment === "." || segment === ".." ? encodeDots(segment) : encodeURIComponent(segment),
+    )
+    .join("/");
+  return `/${path}`;
+}
+
+/** Percent-encodes the dots so URL normalization treats it as a literal name. */
+function encodeDots(segment: string): string {
+  return segment.replace(/\./g, "%2E");
 }

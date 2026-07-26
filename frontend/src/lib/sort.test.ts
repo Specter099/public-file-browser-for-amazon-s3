@@ -33,9 +33,10 @@ describe("sortEntries", () => {
     ]);
   });
 
-  it("orders a truncated page strictly lexicographically, interleaving folders", () => {
-    // Once S3 truncates, a page is not "the next objects" of the previous page,
-    // so per-page folder grouping would look arbitrary. Documented behavior.
+  it("orders a paginated page strictly lexicographically, interleaving folders", () => {
+    // Once pagination is in play, a page is not "the next objects" of the
+    // previous page, so per-page folder grouping would look arbitrary.
+    // Documented behavior.
     const entries = [file("b.txt"), folder("a/"), file("a.txt"), folder("z/")];
     expect(names(sortEntries(entries, DEFAULT_SORT, true))).toEqual([
       "a.txt",

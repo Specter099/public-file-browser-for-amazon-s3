@@ -44,24 +44,28 @@ function compareBy(a: Entry, b: Entry, column: SortColumn): number {
 /**
  * Orders a listing for display.
  *
- * Folders are grouped above files only when the listing is a single complete
- * page. Once S3 truncates the response the order is strictly lexicographic,
- * because a page's contents are not the next objects of the previous page (S3
- * returns all common prefixes first), so grouping per page would look
- * arbitrary. This mirrors the pre-rebuild `get_display_order()` behavior and
- * the reasoning documented in the project README's FAQ.
+ * Folders are grouped above files only when the listing fits in a single
+ * complete page. As soon as pagination is in play the order is strictly
+ * lexicographic, because a page's contents are not the next objects of the
+ * previous page (S3 returns all common prefixes first), so grouping per page
+ * would look arbitrary. This mirrors the pre-rebuild `get_display_order()`
+ * behavior and the reasoning documented in the project README's FAQ.
+ *
+ * `isPaginated` must be true for *any* page of a multi-page listing, not only
+ * truncated ones -- the final page is un-truncated, and regrouping there would
+ * visibly flip ordering mode mid-pagination.
  *
  * An explicit non-default sort (the user clicking a column header) always
- * applies to the current page, truncated or not.
+ * applies to the current page, paginated or not.
  */
 export function sortEntries(
   entries: readonly Entry[],
   sort: SortState,
-  isTruncated: boolean,
+  isPaginated: boolean,
 ): Entry[] {
   const sorted = [...entries];
   const isDefaultSort = sort.column === DEFAULT_SORT.column && sort.direction === DEFAULT_SORT.direction;
-  const groupFolders = !isTruncated || !isDefaultSort;
+  const groupFolders = !isPaginated || !isDefaultSort;
   const factor = sort.direction === "asc" ? 1 : -1;
 
   sorted.sort((a, b) => {

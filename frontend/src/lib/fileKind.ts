@@ -58,9 +58,16 @@ export function fileKind(key: string): FileKind {
 /**
  * Whether a key can be shown as an inline image thumbnail.
  *
- * SVG is deliberately excluded even though it is an image: an attacker-supplied
- * SVG rendered from the same origin can carry script, and the files bucket is
- * publicly writable by whoever administers it. Rasterized formats only.
+ * SVG is excluded even though it is an image, but for rendering reasons rather
+ * than security ones: an SVG with no intrinsic size renders unpredictably in a
+ * fixed thumbnail box, and one built for a different background can be
+ * invisible. Scripts inside an SVG loaded through `<img>` do not execute, so
+ * this is not a script-injection mitigation -- that exposure comes from
+ * *clicking* an `.svg` or `.html` object, which serves it as a top-level
+ * document on the same CloudFront origin. That is inherent to the
+ * single-distribution design and applies equally to both views; the mitigation
+ * is `Content-Disposition` on the files origin, a deferred item tracked in
+ * CLAUDE.md.
  */
 export function isThumbnailable(key: string): boolean {
   const lower = key.toLowerCase();

@@ -103,19 +103,31 @@ frontend/
   live under that prefix. Changing `BASE` in `vite.config.ts` requires changing
   the distribution's cache behavior to match.
 - **Subresource Integrity is generated at build time**, since a bundled build has
-  no fixed vendor filenames to pin by hand. Digests are computed from the files
-  as written to disk, not from in-memory chunk contents, because chunk code is
-  still rewritten after Vite's `generateBundle` hook runs — hashing there
-  produces digests that do not match what the browser fetches. `npm run
-  verify:sri` guards against that regression, and `../sam/verify.sh` re-checks
-  the digests against a live distribution.
+  no fixed vendor filenames to pin by hand. Two constraints keep it honest:
+  - Digests are computed from the files as written to disk, not from in-memory
+    chunk contents, because chunk code is still rewritten after Vite's
+    `generateBundle` hook runs — hashing there produces digests that do not
+    match what the browser fetches.
+  - `build.rollupOptions.output.inlineDynamicImports` is on, because
+    HTML-attribute SRI cannot cover a chunk loaded by a runtime `import()`. The
+    AWS SDK lazily imports its Cognito identity client, which otherwise landed
+    on disk with no integrity check anywhere.
+
+  `npm run verify:sri` guards both: it compares declared digests against the
+  emitted bytes and fails if any emitted asset is not referenced with integrity
+  from `index.html`. `../sam/verify.sh` re-checks digests against a live
+  distribution. Note the threat model — anyone who can rewrite bucket assets can
+  rewrite `index.html` too, so this is a corruption/stale-deploy tripwire rather
+  than protection against a compromised origin.
 - **No `dangerouslySetInnerHTML` anywhere.** Object keys and the `?p=` prefix are
   attacker-controllable; React escapes text children, which removes the
   `escapeHtml()` discipline the pre-rebuild app depended on. Keep it that way.
-- **SVG objects are not rendered as grid thumbnails**, even though they are
-  images: a same-origin SVG can carry script, and anyone who can write to the
-  files bucket controls that content. Raster formats only
-  (`src/lib/fileKind.ts`).
+- **SVG objects are not rendered as grid thumbnails** (`src/lib/fileKind.ts`),
+  for rendering reasons rather than security ones — an SVG with no intrinsic
+  size renders unpredictably in a fixed box. Script inside an SVG loaded via
+  `<img>` does not execute; the real same-origin script vector is clicking an
+  `.svg`/`.html` object, which is inherent to serving files from the same
+  distribution and is mitigated by `Content-Disposition` (deferred).
 - **Folders sort above files only on a complete listing page.** Once S3 truncates
   the response, ordering is strictly lexicographic. This is intentional and
   matches the pre-rebuild behavior; see the comment in `src/lib/sort.ts` and the
