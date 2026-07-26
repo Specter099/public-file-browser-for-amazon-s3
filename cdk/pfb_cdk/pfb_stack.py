@@ -15,6 +15,7 @@ the SAM/CloudFormation template it replaces:
     CustomSeedS3DataRole below) — granting it would create a CloudWatch log
     group during stack deletion that cannot be cleaned up automatically.
 """
+
 from pathlib import Path
 
 from aws_cdk import (
@@ -32,6 +33,7 @@ from aws_cdk import aws_cloudfront_origins as origins
 from aws_cdk import aws_cognito as cognito
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as lambda_
+from aws_cdk import aws_logs as logs
 from aws_cdk import aws_s3 as s3
 from constructs import Construct
 
@@ -40,11 +42,18 @@ from pfb_cdk.lambda_bundling import seed_lambda_bundling_options
 # sam/seed_s3_data/ is reused as-is (app.py + website.zip) so the Lambda
 # source and the website bundle keep a single source of truth instead of
 # being duplicated under cdk/.
-_SEED_S3_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "sam" / "seed_s3_data"
+_SEED_S3_DATA_DIR = (
+    Path(__file__).resolve().parent.parent.parent / "sam" / "seed_s3_data"
+)
 
 # AWS managed "CachingOptimized" cache policy — the same
 # 658327ea-f89d-4fab-a63d-7e88639e58f6 the SAM template references by ID.
 _CACHING_OPTIMIZED = cloudfront.CachePolicy.CACHING_OPTIMIZED
+
+# Prefix within the logging bucket for CloudFront access logs. The delivery
+# destination ARN and the bucket policy's Resource must agree on this — if
+# they diverge, delivery fails silently with no error surfaced anywhere.
+_CF_LOG_PREFIX = "cloudfront"
 
 
 class PublicFileBrowserStack(Stack):
@@ -76,12 +85,15 @@ class PublicFileBrowserStack(Stack):
 
         headers_policy = self._create_security_headers_policy(unique)
         distribution = self._create_distribution(
-            unique, logging_bucket, files_origin, website_origin, headers_policy
+            unique, files_origin, website_origin, headers_policy
         )
+        self._create_cloudfront_log_delivery(unique, distribution, logging_bucket)
 
         identity_pool, unauth_role = self._create_cognito(unique, files_bucket)
 
-        self._create_seed_custom_resource(website_bucket, files_bucket, identity_pool, params)
+        self._create_seed_custom_resource(
+            website_bucket, files_bucket, identity_pool, params
+        )
 
         CfnOutput(
             self,
@@ -188,7 +200,16 @@ class PublicFileBrowserStack(Stack):
             "LoggingBucket",
             bucket_name=f"public-file-browser-logging-{unique}",
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-            object_ownership=s3.ObjectOwnership.BUCKET_OWNER_PREFERRED,
+            # ACLs are fully disabled. The SAM template uses
+            # BUCKET_OWNER_PREFERRED because CloudFront standard logging
+            # (legacy) delivers via an ACL grant to the awslogsdelivery
+            # account and cannot write to a BUCKET_OWNER_ENFORCED bucket.
+            # This stack uses standard logging v2 instead (see
+            # _create_cloudfront_log_delivery), which delivers via a bucket
+            # policy, so ACLs are no longer needed by anything here — S3
+            # server access logging already uses a bucket policy under the
+            # @aws-cdk/aws-s3:serverAccessLogsUseBucketPolicy feature flag.
+            object_ownership=s3.ObjectOwnership.BUCKET_OWNER_ENFORCED,
             encryption=s3.BucketEncryption.S3_MANAGED,
             versioned=True,
             enforce_ssl=True,
@@ -223,7 +244,9 @@ class PublicFileBrowserStack(Stack):
         }
         return bucket
 
-    def _create_website_bucket(self, unique: str, logging_bucket: s3.Bucket) -> s3.Bucket:
+    def _create_website_bucket(
+        self, unique: str, logging_bucket: s3.Bucket
+    ) -> s3.Bucket:
         return s3.Bucket(
             self,
             "PublicWebsiteBucket",
@@ -251,7 +274,10 @@ class PublicFileBrowserStack(Stack):
         )
 
     def _create_files_bucket(
-        self, unique: str, logging_bucket: s3.Bucket, cross_origin_restriction: CfnParameter
+        self,
+        unique: str,
+        logging_bucket: s3.Bucket,
+        cross_origin_restriction: CfnParameter,
     ) -> s3.Bucket:
         return s3.Bucket(
             self,
@@ -293,7 +319,9 @@ class PublicFileBrowserStack(Stack):
     # ------------------------------------------------------------------
     # CloudFront
     # ------------------------------------------------------------------
-    def _create_security_headers_policy(self, unique: str) -> cloudfront.ResponseHeadersPolicy:
+    def _create_security_headers_policy(
+        self, unique: str
+    ) -> cloudfront.ResponseHeadersPolicy:
         return cloudfront.ResponseHeadersPolicy(
             self,
             "SecurityResponseHeadersPolicy",
@@ -306,7 +334,9 @@ class PublicFileBrowserStack(Stack):
                     preload=True,
                     override=True,
                 ),
-                content_type_options=cloudfront.ResponseHeadersContentTypeOptions(override=True),
+                content_type_options=cloudfront.ResponseHeadersContentTypeOptions(
+                    override=True
+                ),
                 referrer_policy=cloudfront.ResponseHeadersReferrerPolicy(
                     referrer_policy=cloudfront.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN,
                     override=True,
@@ -321,7 +351,6 @@ class PublicFileBrowserStack(Stack):
     def _create_distribution(
         self,
         unique: str,
-        logging_bucket: s3.Bucket,
         files_origin: origins.S3BucketOrigin,
         website_origin: origins.S3BucketOrigin,
         headers_policy: cloudfront.ResponseHeadersPolicy,
@@ -347,16 +376,85 @@ class PublicFileBrowserStack(Stack):
                 )
             },
             default_root_object="pfb_for_s3/index.html",
-            enable_logging=True,
-            log_bucket=logging_bucket,
-            log_file_prefix="cloudfront",
-            log_includes_cookies=False,
+            # Access logging is configured out-of-band via standard logging
+            # v2 (_create_cloudfront_log_delivery), not the distribution's
+            # own legacy `Logging` block. Cookie logging stays off by
+            # default, matching the SAM template's IncludeCookies: false.
             http_version=cloudfront.HttpVersion.HTTP2,
             price_class=cloudfront.PriceClass.PRICE_CLASS_100,
             enable_ipv6=False,
             # Uncomment to restrict access to the US, as in the SAM template.
             # geo_restriction=cloudfront.GeoRestriction.allowlist("US"),
         )
+
+    def _create_cloudfront_log_delivery(
+        self,
+        unique: str,
+        distribution: cloudfront.Distribution,
+        logging_bucket: s3.Bucket,
+    ) -> None:
+        """Deliver CloudFront access logs to the logging bucket via CloudWatch
+        vended logs (standard logging v2) rather than the distribution's legacy
+        `Logging` block.
+
+        Legacy logging delivers by granting the awslogsdelivery account an ACL
+        on the destination bucket, which forces the bucket to keep ACLs enabled
+        (BUCKET_OWNER_PREFERRED). v2 delivers via a bucket policy, so the bucket
+        can disable ACLs entirely. These control-plane resources must be created
+        in us-east-1 even for cross-region destinations, because CloudFront is a
+        global service.
+        """
+        logging_bucket.add_to_resource_policy(
+            iam.PolicyStatement(
+                sid="AWSLogDeliveryWrite",
+                effect=iam.Effect.ALLOW,
+                principals=[iam.ServicePrincipal("delivery.logs.amazonaws.com")],
+                actions=["s3:PutObject"],
+                resources=[logging_bucket.arn_for_objects(f"{_CF_LOG_PREFIX}/*")],
+                conditions={
+                    "StringEquals": {
+                        # Accepted by a BUCKET_OWNER_ENFORCED bucket: it is the
+                        # one canned ACL still permitted when ACLs are disabled.
+                        "s3:x-amz-acl": "bucket-owner-full-control",
+                        "aws:SourceAccount": Aws.ACCOUNT_ID,
+                    },
+                    "ArnLike": {
+                        "aws:SourceArn": (
+                            f"arn:{Aws.PARTITION}:logs:{Aws.REGION}:"
+                            f"{Aws.ACCOUNT_ID}:delivery-source:*"
+                        )
+                    },
+                },
+            )
+        )
+
+        log_source = logs.CfnDeliverySource(
+            self,
+            "CloudFrontAccessLogSource",
+            name=f"public-file-browser-cf-logs-{unique}",
+            log_type="ACCESS_LOGS",
+            resource_arn=distribution.distribution_arn,
+        )
+        log_destination = logs.CfnDeliveryDestination(
+            self,
+            "CloudFrontAccessLogDestination",
+            name=f"public-file-browser-cf-logs-s3-{unique}",
+            destination_resource_arn=f"{logging_bucket.bucket_arn}/{_CF_LOG_PREFIX}",
+            # Closest equivalent to the legacy access log format.
+            output_format="w3c",
+        )
+        log_delivery = logs.CfnDelivery(
+            self,
+            "CloudFrontAccessLogDelivery",
+            delivery_source_name=log_source.name,
+            delivery_destination_arn=log_destination.attr_arn,
+        )
+        # delivery_source_name is a literal string, so CloudFormation infers no
+        # dependency on the source the way it does from the destination's ARN.
+        log_delivery.add_dependency(log_source)
+        # The bucket policy has to be in place before the first delivery
+        # attempt, and nothing else establishes that ordering.
+        log_delivery.node.add_dependency(logging_bucket.policy)
 
     # ------------------------------------------------------------------
     # Cognito
@@ -376,7 +474,9 @@ class PublicFileBrowserStack(Stack):
             assumed_by=iam.FederatedPrincipal(
                 "cognito-identity.amazonaws.com",
                 conditions={
-                    "StringEquals": {"cognito-identity.amazonaws.com:aud": identity_pool.ref},
+                    "StringEquals": {
+                        "cognito-identity.amazonaws.com:aud": identity_pool.ref
+                    },
                     "ForAnyValue:StringLike": {
                         "cognito-identity.amazonaws.com:amr": "unauthenticated"
                     },
@@ -450,6 +550,8 @@ class PublicFileBrowserStack(Stack):
                 "PublicWebsiteBucket": website_bucket.bucket_name,
                 "FilesBucketName": files_bucket.bucket_name,
                 "FilesOpenMode": params["files_open_tab_mode"].value_as_string,
-                "VisibleStorageClasses": params["visible_storage_classes"].value_as_string,
+                "VisibleStorageClasses": params[
+                    "visible_storage_classes"
+                ].value_as_string,
             },
         )

@@ -89,6 +89,24 @@ cdk/
   `Retain`-policy log group, which is exactly the uncleanable leftover the
   no-`AWSLambdaBasicExecutionRole` design exists to prevent. A unit test
   asserts the resource count stays at zero.
+- **CloudFront access logs use standard logging v2, not the legacy `Logging`
+  block the SAM template uses.** The distribution has no `Logging` property;
+  instead the stack creates `AWS::Logs::DeliverySource` /
+  `DeliveryDestination` / `Delivery` pointing at the `cloudfront/` prefix of
+  the logging bucket. This is what lets the logging bucket set
+  `BUCKET_OWNER_ENFORCED` (ACLs fully disabled) where SAM must use
+  `BUCKET_OWNER_PREFERRED`: legacy logging delivers by granting the
+  `awslogsdelivery` account a bucket ACL and cannot write to an ACL-disabled
+  bucket, while v2 delivers via a bucket policy.
+  - The delivery destination ARN's prefix and the `AWSLogDeliveryWrite`
+    statement's `Resource` must stay in sync (`_CF_LOG_PREFIX`). If they
+    diverge, delivery stops silently — no error surfaces on the distribution,
+    the bucket, or in CloudFormation.
+  - These control-plane resources must live in us-east-1 regardless of where
+    the destination bucket is, because CloudFront is a global service.
+  - Delivery source names are unique per account and immutable. A pre-existing
+    v2 delivery source for the same distribution (created by hand or via the
+    console) will fail the stack until it is removed.
 - One intentional IAM difference from SAM: the OAC bucket policies grant
   `s3:GetObject` but not `s3:GetObjectVersion` (CDK's
   `S3BucketOrigin.with_origin_access_control` generates the former only).

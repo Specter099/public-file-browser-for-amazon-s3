@@ -19,7 +19,9 @@ _BASIC_EXECUTION_ROLE_SUFFIX = "service-role/AWSLambdaBasicExecutionRole"
 # @aws-cdk/aws-lambda:useCdkManagedLogGroup decides whether a log group is
 # emitted at all. Load the real context so the tests assert against the same
 # template `cdk deploy` would push.
-_CDK_JSON = json.loads((Path(__file__).resolve().parent.parent.parent / "cdk.json").read_text())
+_CDK_JSON = json.loads(
+    (Path(__file__).resolve().parent.parent.parent / "cdk.json").read_text()
+)
 
 
 def _bucket_name_prefix(bucket_resource: dict) -> str:
@@ -217,9 +219,15 @@ def test_website_and_files_buckets_grant_cloudfront_read_via_oac(template: Templ
     )
     matches = template.find_resources(
         "AWS::S3::BucketPolicy",
-        {"Properties": {"PolicyDocument": {"Statement": Match.array_with([statement])}}},
+        {
+            "Properties": {
+                "PolicyDocument": {"Statement": Match.array_with([statement])}
+            }
+        },
     )
-    assert len(matches) == 2, "expected both origin buckets to grant CloudFront OAC read access"
+    assert len(matches) == 2, (
+        "expected both origin buckets to grant CloudFront OAC read access"
+    )
 
 
 # ----------------------------------------------------------------------
@@ -293,7 +301,77 @@ def test_distribution_security_settings(template: Template):
                     "DefaultCacheBehavior": Match.object_like(
                         {"ViewerProtocolPolicy": "redirect-to-https"}
                     ),
-                    "Logging": Match.object_like({"IncludeCookies": False}),
+                }
+            )
+        },
+    )
+
+
+def test_distribution_has_no_legacy_logging_block(template: Template):
+    # Access logs go through standard logging v2 (AWS::Logs::Delivery*), not
+    # the distribution's legacy `Logging` block. Legacy logging delivers via an
+    # ACL grant, which would force the logging bucket back to
+    # BucketOwnerPreferred -- see test_logging_bucket_disables_acls.
+    distributions = template.find_resources("AWS::CloudFront::Distribution")
+    assert len(distributions) == 1
+    config = next(iter(distributions.values()))["Properties"]["DistributionConfig"]
+    assert "Logging" not in config
+
+
+def test_logging_bucket_disables_acls(template: Template):
+    # ACLs are disabled outright, which is only possible because nothing here
+    # delivers logs via an ACL grant any more. Reverting the distribution to
+    # legacy logging would force this back to BucketOwnerPreferred.
+    buckets = template.find_resources("AWS::S3::Bucket")
+    logging_buckets = [
+        b
+        for b in buckets.values()
+        if _bucket_name_prefix(b) == "public-file-browser-logging-"
+    ]
+    assert len(logging_buckets) == 1
+    assert logging_buckets[0]["Properties"]["OwnershipControls"] == {
+        "Rules": [{"ObjectOwnership": "BucketOwnerEnforced"}]
+    }
+
+
+def test_cloudfront_access_logs_delivered_via_logs_delivery(template: Template):
+    template.resource_count_is("AWS::Logs::DeliverySource", 1)
+    template.resource_count_is("AWS::Logs::DeliveryDestination", 1)
+    template.resource_count_is("AWS::Logs::Delivery", 1)
+
+    template.has_resource_properties(
+        "AWS::Logs::DeliverySource",
+        Match.object_like({"LogType": "ACCESS_LOGS"}),
+    )
+    template.has_resource_properties(
+        "AWS::Logs::DeliveryDestination",
+        Match.object_like({"OutputFormat": "w3c"}),
+    )
+
+
+def test_logging_bucket_grants_log_delivery_service_write(template: Template):
+    # The bucket policy is the whole delivery mechanism under v2. Its Resource
+    # must match the prefix in the delivery destination ARN or logs stop
+    # arriving with no error anywhere.
+    template.has_resource_properties(
+        "AWS::S3::BucketPolicy",
+        {
+            "PolicyDocument": Match.object_like(
+                {
+                    "Statement": Match.array_with(
+                        [
+                            Match.object_like(
+                                {
+                                    "Sid": "AWSLogDeliveryWrite",
+                                    "Effect": "Allow",
+                                    "Action": "s3:PutObject",
+                                    "Principal": {
+                                        "Service": "delivery.logs.amazonaws.com"
+                                    },
+                                }
+                            )
+                        ]
+                    )
                 }
             )
         },
@@ -514,7 +592,9 @@ def test_unauthenticated_role_can_only_list_files_bucket(template: Template):
             }
         ]
     ]
-    assert len(unauth_policies) == 1, "expected exactly one files-bucket ListBucket policy"
+    assert len(unauth_policies) == 1, (
+        "expected exactly one files-bucket ListBucket policy"
+    )
 
 
 # ----------------------------------------------------------------------
