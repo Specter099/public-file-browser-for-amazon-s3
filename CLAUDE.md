@@ -33,15 +33,28 @@
 │       ├── requirements.txt
 │       └── unit/
 │           └── test_seed_s3_data.py  # 4 pytest tests using moto
+├── cdk/                        # AWS CDK (Python) — alternative to sam/, same infra
+│   ├── app.py                  # CDK app entrypoint
+│   ├── cdk.json                # CDK CLI config + feature-flag context
+│   ├── pfb_cdk/
+│   │   ├── pfb_stack.py        # the stack: buckets, CloudFront, Cognito, Lambda custom resource
+│   │   └── lambda_bundling.py  # non-Docker asset bundling for the seed_s3_data Lambda
+│   └── tests/unit/
+│       └── test_pfb_stack.py   # 29 pytest tests using aws_cdk.assertions
 └── docs/                       # Architecture diagram and screenshots
 ```
+
+`sam/` and `cdk/` are two independent implementations of the *same*
+infrastructure — pick one per deployment, don't deploy both against the same
+account/region (see `cdk/README.md`). `cdk/` reuses `sam/seed_s3_data/app.py`
+and `website.zip` directly rather than duplicating them.
 
 ## Tech Stack
 
 **Frontend:** Vanilla HTML/CSS/JavaScript (no framework, no transpilation)
 - Bootstrap 5.3 (UI), jQuery 3.7.1 (DOM), Luxon (dates), AWS SDK v2 (S3 API)
 
-**Infrastructure:** AWS SAM (CloudFormation)
+**Infrastructure:** AWS SAM (CloudFormation), with an AWS CDK (Python) equivalent under `cdk/`
 - S3 (3 buckets: website, files, logs), CloudFront (+ Response Headers Policy, Origin Access Control), Cognito Identity Pool, Lambda, IAM
 
 **Backend:** Python 3.13 Lambda function (arm64)
@@ -95,6 +108,25 @@ The tests `os.chdir("seed_s3_data")` (so the Lambda can find `website.zip` by re
 node --check website/js/main.js   # JS syntax check (no linter is configured)
 cfn-lint sam/template.yaml        # template lint; some pre-existing warnings are expected
 ```
+
+### CDK (alternative to SAM)
+
+`cdk/` is a from-scratch Python CDK translation of `sam/template.yaml` — same
+resources, naming convention, and security posture, deployed as its own
+CloudFormation stack (not integrated with the SAM stack). See `cdk/README.md`
+for full details; summary:
+
+```bash
+cd cdk
+pip install -r requirements.txt -r requirements-dev.txt
+cdk bootstrap        # once per account/region
+cdk synth             # no Docker required — see pfb_cdk/lambda_bundling.py
+cdk deploy
+python -m pytest tests/unit -v   # 29 tests via aws_cdk.assertions
+```
+
+The same two-pass `CrossOriginRestriction` deploy applies. `sam/verify.sh`
+works unchanged against a CDK-deployed stack.
 
 ## Architecture
 
@@ -159,10 +191,12 @@ Known items intentionally deferred (they change behavior or deploy semantics and
 | File listing UI, sorting, pagination | `website/js/main.js` |
 | Page layout, HTML structure, vendor script tags/SRI | `website/index.html` |
 | Custom styles | `website/css/main.css` |
-| AWS infrastructure (buckets, CDN, IAM, headers policy) | `sam/template.yaml` |
-| Deployment logic (file upload/config substitution) | `sam/seed_s3_data/app.py` |
-| Tests | `sam/tests/unit/test_seed_s3_data.py` |
-| Post-deploy verification | `sam/verify.sh` |
+| AWS infrastructure (buckets, CDN, IAM, headers policy) — SAM | `sam/template.yaml` |
+| AWS infrastructure — CDK | `cdk/pfb_cdk/pfb_stack.py` |
+| Deployment logic (file upload/config substitution) | `sam/seed_s3_data/app.py` (shared by both SAM and CDK) |
+| Tests — SAM Lambda | `sam/tests/unit/test_seed_s3_data.py` |
+| Tests — CDK stack | `cdk/tests/unit/test_pfb_stack.py` |
+| Post-deploy verification | `sam/verify.sh` (works against either deployment) |
 
 ## Important Notes
 
@@ -173,3 +207,6 @@ Known items intentionally deferred (they change behavior or deploy semantics and
 - The frontend sorts folders above files only when the listing is a single un-truncated page (<1000 objects); otherwise it uses S3's lexicographic order. This is deliberate — see the comment in `get_display_order()` and the FAQ in `README.md`.
 - Version skew to be aware of: the Lambda `Runtime` is `python3.13` in `template.yaml`, while both `pyproject.toml` files still pin `python = "~3.11"` and `README.md` lists Python 3.11 as a prerequisite. `seed_s3_data/requirements.txt` uses `python_version >= "3.13"` markers; `tests/requirements.txt` still uses `>= "3.11", < "3.12"`.
 - `CHANGELOG.md` follows Keep a Changelog; the last released version is 1.0.0.
+- `cdk/pfb_cdk/lambda_bundling.py`'s local bundler drops those `python_version` markers before installing (otherwise pip evaluates them against the synth host and resolves to an empty install on anything older than 3.13), skips `sys_platform`-gated non-Linux requirements, and cross-installs wheels for `manylinux2014_aarch64`/Python 3.13 regardless of the host — this is what lets `cdk synth`/tests work with no Docker daemon available.
+- CDK test fixtures load `cdk/cdk.json`'s `context` block explicitly (a bare `cdk.App()` doesn't pick it up outside the `cdk` CLI). Feature flags change synthesized output, so **audit new flags against this project's constraints** — the list came from `cdk init` boilerplate, and `@aws-cdk/aws-lambda:useCdkManagedLogGroup` ships as `true`, which synthesizes exactly the `Retain`-policy CloudWatch log group the no-`AWSLambdaBasicExecutionRole` design exists to avoid. It is set to `false`, with a test asserting zero `AWS::Logs::LogGroup` resources.
+- CDK bucket removal policies are set explicitly to match SAM (logging bucket `Retain`, website + files `Delete`) because CDK's `s3.Bucket` default is `Retain`. `Delete` can't lose user data — S3 refuses to delete a non-empty bucket. `auto_delete_objects` is deliberately unused: it adds a second Lambda with CloudWatch permissions.

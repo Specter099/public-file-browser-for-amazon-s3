@@ -241,6 +241,10 @@ $RECYCLE.BIN/
 # End of https://www.gitignore.io/api/osx,linux,python,windows,pycharm,visualstudiocode
 .aws-sam/*
 samconfig.toml
+
+# AWS CDK
+cdk/cdk.out/
+cdk.context.json
 .idea/*
 ash_cf2cdk_output/*
 aggregated_results.txt

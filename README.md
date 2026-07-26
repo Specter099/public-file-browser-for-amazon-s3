@@ -86,6 +86,10 @@ For this walkthrough, you need to have the following prerequisites:
 
 This concludes the deployment of the Public File Browser for Amazon S3 web application. AWS SAM CLI uses [AWS CloudFormation](https://aws.amazon.com/cloudformation/) to orchestrate the deployment of the front-end static website and public file storage bucket. The entire application is deployed.
 
+#### Alternative: AWS CDK (Python)
+
+If you'd rather deploy with the [AWS CDK](https://aws.amazon.com/cdk/) instead of SAM, an equivalent Python CDK app that creates the same infrastructure is available under [`cdk/`](./cdk/README.md). Deploy one or the other, not both, against the same account/region.
+
 ### Usage
 
 To add files to the public interface simply move files into the S3 Bucket indicated in the `PublicFilesBucket` output from the above SAM Deploy command. The bucket name should start with `public-file-browser-files-` followed by a random string.
