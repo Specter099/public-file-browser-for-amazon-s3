@@ -8,7 +8,7 @@ import { ListingGrid } from "./components/ListingGrid.tsx";
 import { ListingTable } from "./components/ListingTable.tsx";
 import { Toolbar, type ViewMode } from "./components/Toolbar.tsx";
 import type { SiteConfig } from "./lib/config.ts";
-import { listPrefix, parentPrefix, type Listing } from "./lib/s3.ts";
+import { listPrefix, parentPrefix, type Entry, type Listing } from "./lib/s3.ts";
 import { DEFAULT_SORT, filterEntries, sortEntries, type SortColumn, type SortState } from "./lib/sort.ts";
 import { useBrowserLocation } from "./lib/useBrowserLocation.ts";
 import { useTheme } from "./lib/useTheme.ts";
@@ -17,6 +17,9 @@ export interface AppProps {
   config: SiteConfig;
   client: S3Client;
 }
+
+/** Stable empty-listing reference; see the useMemo note below. */
+const NO_ENTRIES: readonly Entry[] = [];
 
 export function App({ config, client }: AppProps) {
   const { location, navigate } = useBrowserLocation();
@@ -37,15 +40,21 @@ export function App({ config, client }: AppProps) {
 
   useEffect(() => {
     let cancelled = false;
-    setIsLoading(true);
-    setError(null);
 
-    listPrefix(client, config, { prefix, ...(startAfter ? { startAfter } : {}) })
-      .then((result) => {
-        if (cancelled) return;
-        setListing(result);
-      })
-      .catch((cause: unknown) => {
+    // State updates all happen inside this async function rather than
+    // synchronously in the effect body. A synchronous setState during the
+    // commit phase forces an extra cascading render before paint, which is what
+    // react-hooks/set-state-in-effect flags.
+    const load = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const result = await listPrefix(client, config, {
+          prefix,
+          ...(startAfter ? { startAfter } : {}),
+        });
+        if (!cancelled) setListing(result);
+      } catch (cause: unknown) {
         if (cancelled) return;
         setListing(null);
         setError(
@@ -53,10 +62,12 @@ export function App({ config, client }: AppProps) {
             ? cause.message
             : "Could not list the bucket contents. Please try again.",
         );
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setIsLoading(false);
-      });
+      }
+    };
+
+    void load();
 
     return () => {
       cancelled = true;
@@ -80,7 +91,10 @@ export function App({ config, client }: AppProps) {
     );
   }, []);
 
-  const allEntries = listing?.entries ?? [];
+  // NO_ENTRIES is a module-level constant, not an inline `?? []`: a fresh array
+  // literal here would be a new reference on every render, so the useMemo below
+  // would recompute every time and the memo would do nothing.
+  const allEntries = listing?.entries ?? NO_ENTRIES;
   // Any page reached via `?s=` is part of a multi-page listing, even the final
   // un-truncated one, so ordering mode must not flip on the last page.
   const isPaginated = (listing?.isTruncated ?? false) || startAfter !== "";

@@ -15,6 +15,7 @@ the SAM/CloudFormation template it replaces:
     CustomSeedS3DataRole below) — granting it would create a CloudWatch log
     group during stack deletion that cannot be cleaned up automatically.
 """
+
 from pathlib import Path
 
 from aws_cdk import (
@@ -40,7 +41,9 @@ from pfb_cdk.lambda_bundling import seed_lambda_bundling_options
 # sam/seed_s3_data/ is reused as-is (app.py + website.zip) so the Lambda
 # source and the website bundle keep a single source of truth instead of
 # being duplicated under cdk/.
-_SEED_S3_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "sam" / "seed_s3_data"
+_SEED_S3_DATA_DIR = (
+    Path(__file__).resolve().parent.parent.parent / "sam" / "seed_s3_data"
+)
 
 # AWS managed "CachingOptimized" cache policy — the same
 # 658327ea-f89d-4fab-a63d-7e88639e58f6 the SAM template references by ID.
@@ -81,7 +84,9 @@ class PublicFileBrowserStack(Stack):
 
         identity_pool, unauth_role = self._create_cognito(unique, files_bucket)
 
-        self._create_seed_custom_resource(website_bucket, files_bucket, identity_pool, params)
+        self._create_seed_custom_resource(
+            website_bucket, files_bucket, identity_pool, params
+        )
 
         CfnOutput(
             self,
@@ -223,7 +228,9 @@ class PublicFileBrowserStack(Stack):
         }
         return bucket
 
-    def _create_website_bucket(self, unique: str, logging_bucket: s3.Bucket) -> s3.Bucket:
+    def _create_website_bucket(
+        self, unique: str, logging_bucket: s3.Bucket
+    ) -> s3.Bucket:
         return s3.Bucket(
             self,
             "PublicWebsiteBucket",
@@ -251,7 +258,10 @@ class PublicFileBrowserStack(Stack):
         )
 
     def _create_files_bucket(
-        self, unique: str, logging_bucket: s3.Bucket, cross_origin_restriction: CfnParameter
+        self,
+        unique: str,
+        logging_bucket: s3.Bucket,
+        cross_origin_restriction: CfnParameter,
     ) -> s3.Bucket:
         return s3.Bucket(
             self,
@@ -293,7 +303,9 @@ class PublicFileBrowserStack(Stack):
     # ------------------------------------------------------------------
     # CloudFront
     # ------------------------------------------------------------------
-    def _create_security_headers_policy(self, unique: str) -> cloudfront.ResponseHeadersPolicy:
+    def _create_security_headers_policy(
+        self, unique: str
+    ) -> cloudfront.ResponseHeadersPolicy:
         return cloudfront.ResponseHeadersPolicy(
             self,
             "SecurityResponseHeadersPolicy",
@@ -306,7 +318,9 @@ class PublicFileBrowserStack(Stack):
                     preload=True,
                     override=True,
                 ),
-                content_type_options=cloudfront.ResponseHeadersContentTypeOptions(override=True),
+                content_type_options=cloudfront.ResponseHeadersContentTypeOptions(
+                    override=True
+                ),
                 referrer_policy=cloudfront.ResponseHeadersReferrerPolicy(
                     referrer_policy=cloudfront.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN,
                     override=True,
@@ -376,7 +390,9 @@ class PublicFileBrowserStack(Stack):
             assumed_by=iam.FederatedPrincipal(
                 "cognito-identity.amazonaws.com",
                 conditions={
-                    "StringEquals": {"cognito-identity.amazonaws.com:aud": identity_pool.ref},
+                    "StringEquals": {
+                        "cognito-identity.amazonaws.com:aud": identity_pool.ref
+                    },
                     "ForAnyValue:StringLike": {
                         "cognito-identity.amazonaws.com:amr": "unauthenticated"
                     },
@@ -450,6 +466,8 @@ class PublicFileBrowserStack(Stack):
                 "PublicWebsiteBucket": website_bucket.bucket_name,
                 "FilesBucketName": files_bucket.bucket_name,
                 "FilesOpenMode": params["files_open_tab_mode"].value_as_string,
-                "VisibleStorageClasses": params["visible_storage_classes"].value_as_string,
+                "VisibleStorageClasses": params[
+                    "visible_storage_classes"
+                ].value_as_string,
             },
         )

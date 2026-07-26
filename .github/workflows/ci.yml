@@ -1,0 +1,94 @@
+---
+name: CI
+
+# Per the org trigger convention (Specter099/.github CLAUDE.md): checks run on
+# pull_request only. `push: [main]` is reserved for deploy, and branch
+# protection — not re-execution — is what gates the merge. A workflow that
+# triggered on both would double-run every check at merge time (WF014).
+on:
+  pull_request:
+    branches: [main]
+    # A `workflow_call` target cannot filter paths, so path filtering has to
+    # live here in the caller.
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - 'THIRD-PARTY-LICENSES'
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Frontend (npm lint/test/build) + CDK infra (pytest, pip-audit, synth, diff,
+  # with the diff posted as a PR comment).
+  review:
+    name: Frontend & Infra
+    uses: Specter099/.github/.github/workflows/static-site-review.yml@main
+    secrets: inherit
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    with:
+      frontend-dir: frontend
+      infra-dir: cdk
+      # This repo has no CI_LOGS_BUCKET / CI_LOGS_LOG_GROUP configured, so log
+      # shipping would only add tee/tar/S3 overhead to every run.
+      enable-ci-logs: false
+
+  # ruff + gitleaks over the whole repo, plus the seeding Lambda's own tests.
+  # Those live in sam/tests/ and are not covered by the review job above, which
+  # only runs `pytest <infra-dir>/tests/`.
+  python:
+    name: Python
+    uses: Specter099/.github/.github/workflows/python-ci.yml@main
+    secrets: inherit
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: read
+    with:
+      python-versions: '["3.13"]'
+      requirements-path: requirements-dev.txt
+      tests-dir: sam/tests/
+      bandit: true
+      enable-ci-logs: false
+
+  # Repo-specific invariants the shared workflows cannot know about.
+  bundle:
+    name: Repo Invariants
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+
+      # Cheap and dependency-free, so it runs before the npm install: catches a
+      # CI job added here without a matching stage in the local gate, which
+      # would mean a green local run no longer predicts a green CI run.
+      - name: Check local gate mirrors this workflow
+        run: python3 scripts/check_ci_parity.py
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci --prefix frontend
+
+      # The deployed website bundle is the committed
+      # sam/seed_s3_data/website.zip, not whatever the CD job builds. A change
+      # under frontend/ committed without `npm run bundle` silently ships stale
+      # assets — and the SAM Lambda tests, which read that zip, would be
+      # testing the old build too. Same script the local gate runs, so the two
+      # cannot drift.
+      - name: Verify committed website.zip matches frontend source
+        run: ./scripts/check-bundle-freshness.sh

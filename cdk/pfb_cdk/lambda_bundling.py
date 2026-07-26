@@ -16,6 +16,7 @@ values are all pure-Python (or ship universal wheels), so a real container
 build brings no benefit here and would force a hard Docker dependency onto a
 project that has otherwise never needed one.
 """
+
 import subprocess  # nosec B404 - fixed argv, no shell, used only at synth time
 import sys
 from pathlib import Path

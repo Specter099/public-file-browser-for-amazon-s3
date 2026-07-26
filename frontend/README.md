@@ -21,6 +21,8 @@ npm install
 
 ```bash
 npm run dev          # dev server (see "Local development" for config)
+npm run lint         # ESLint (flat config, type-aware rules)
+npm run lint:fix
 npm run build        # typecheck + production build into ../build/website/
 npm run test         # Vitest + React Testing Library
 npm run test:watch
@@ -28,6 +30,10 @@ npm run typecheck
 npm run verify:sri   # assert built SRI digests match the emitted assets
 npm run bundle       # build + verify:sri + rewrite ../sam/seed_s3_data/website.zip
 ```
+
+`npm run lint`, `npm run test` and `npm run build` are exactly what the CI
+`review` job runs. The repo-root `../scripts/local-ci.sh` runs all three plus the
+Python and bundle-freshness checks — that is the gate to run before opening a PR.
 
 `npm run bundle` is the one that matters for deployment. **After changing
 anything under `frontend/`, run it and commit the regenerated

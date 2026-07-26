@@ -1,0 +1,37 @@
+---
+name: CD
+
+# Per the org trigger convention: deploy runs on push to main only, plus a
+# manual dispatch for re-runs. It deliberately does not re-run the CI suite —
+# branch protection requires the CI checks to have passed before a merge can
+# reach main, so re-running lint/tests here would only burn minutes (WF013).
+on:
+  push:
+    branches: [main]
+    # Documentation-only merges cannot change the deployed artifact.
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - 'THIRD-PARTY-LICENSES'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy
+    uses: Specter099/.github/.github/workflows/static-site-deploy.yml@main
+    secrets: inherit
+    permissions:
+      id-token: write
+      contents: read
+    with:
+      frontend-dir: frontend
+      infra-dir: cdk
+      environment: production
+      enable-ci-logs: false
+      # Deliberately no smoke-test-url. The distribution domain is a stack
+      # output that is not known until the first deploy, and CloudFront
+      # propagation after a deploy regularly exceeds the shared workflow's
+      # 15s curl timeout. Set this once the domain is stable, and see
+      # `sam/verify.sh` for the fuller post-deploy check (security headers,
+      # HSTS, SRI digests, config.json substitution).
